@@ -137,21 +137,30 @@
     <label>window size (K tokens)</label>
     <input type="number" id="in-ctx-size" value="1000">
 
-    <h2>Cost / burn</h2>
+    <h2>Plan limits <span class="small">(rate_limits.* — matches Claude.ai panel)</span></h2>
+    <div class="row">
+      <span><label>5h plan %</label><input type="number" id="in-plan-5h" value="4"></span>
+      <span><label>5h resets (min)</label><input type="number" id="in-block-rem" value="241"></span>
+    </div>
+    <div class="row">
+      <span><label>weekly plan %</label><input type="number" id="in-plan-week" value="27"></span>
+      <span><label>weekly resets (days)</label><input type="number" id="in-week-rem-d" value="4"></span>
+    </div>
+
+    <h2>ccusage (peak-relative, fallback)</h2>
     <div class="row">
       <span><label>session $</label><input type="number" id="in-cost-session" value="0.31" step="0.01"></span>
       <span><label>today $</label><input type="number" id="in-cost-today" value="2.40" step="0.01"></span>
     </div>
     <div class="row">
-      <span><label>5h used %</label><input type="number" id="in-block-used" value="12"></span>
+      <span><label>5h peak %</label><input type="number" id="in-block-used" value="12"></span>
       <span><label>5h proj %</label><input type="number" id="in-block-proj" value="45"></span>
     </div>
     <div class="row">
-      <span><label>5h remaining (min)</label><input type="number" id="in-block-rem" value="135"></span>
-      <span><label>weekly %</label><input type="number" id="in-weekly" value="8"></span>
+      <span><label>weekly peak %</label><input type="number" id="in-weekly" value="23"></span>
+      <span><label>burn (K/min)</label><input type="number" id="in-burn" value="9.4" step="0.1"></span>
     </div>
     <div class="row">
-      <span><label>burn (K/min)</label><input type="number" id="in-burn" value="9.4" step="0.1"></span>
       <span><label>cache TTL elapsed (s)</label><input type="number" id="in-cache-ttl" value="82"></span>
     </div>
   </div>
@@ -215,12 +224,15 @@ const state = {
   behind: 0,
   ctxPct: 22,
   ctxSize: 1000,
+  plan5h: 4,         // .rate_limits.five_hour.used_percentage (plan-relative)
+  planWeek: 27,      // .rate_limits.seven_day.used_percentage (plan-relative)
+  weekRemD: 4,       // days until weekly reset
   costSession: 0.31,
   costToday: 2.40,
-  blockUsed: 12,
+  blockUsed: 12,     // ccusage peak-relative — used as fallback
   blockProj: 45,
-  blockRem: 135,
-  weekly: 8,
+  blockRem: 241,     // minutes until 5h reset
+  weekly: 23,        // ccusage peak-relative weekly
   burn: 9.4,
   cacheTtl: 82,
   sep: ' · ',
@@ -314,12 +326,18 @@ const WIDGETS = {
   } },
   cost_session:      { name: 'cost $0.31',         fn: s => ({t: `$${s.costSession.toFixed(2)}`, c: 'fg-green'}) },
   cost_today:        { name: 'today $2.40',        fn: s => ({t: `today $${s.costToday.toFixed(2)}`, c: 'fg-green'}) },
-  block_pct:         { name: '5h 12%',             fn: s => ({t: `5h ${s.blockUsed}%`, c: blockColor(s.blockUsed)}) },
-  block_proj:        { name: '5h 12%→45%',         fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}%`, c: blockColor(s.blockProj)}) },
-  block_combined:    { name: '5h 12%→45% 2h15m',   fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}% ${minToHm(s.blockRem)}`, c: blockColor(s.blockProj)}) },
-  block_remaining:   { name: '2h15m left',         fn: s => ({t: `${minToHm(s.blockRem)} left`, c: 'fg-muted'}) },
-  weekly:            { name: 'wk 8%',              fn: s => ({t: `${s.weekly}%`, c: 'fg-muted'}) },
-  weekly_label:      { name: 'wk 8% (labeled)',    fn: s => ({t: `wk ${s.weekly}%`, c: 'fg-muted'}) },
+  // Plan-relative (matches Anthropic's usage panel exactly)
+  plan_5h:           { name: '5h plan 4%',         fn: s => ({t: `5h ${s.plan5h}%`, c: blockColor(s.plan5h)}) },
+  plan_5h_reset:     { name: '5h plan 4% (4h2m)',  fn: s => ({t: `5h ${s.plan5h}% ${minToHm(s.blockRem)}`, c: blockColor(s.plan5h)}) },
+  plan_week:         { name: 'wk plan 27%',        fn: s => ({t: `wk ${s.planWeek}%`, c: blockColor(s.planWeek)}) },
+  plan_week_reset:   { name: 'wk plan 27% (4d)',   fn: s => ({t: `wk ${s.planWeek}% ${s.weekRemD}d`, c: blockColor(s.planWeek)}) },
+  // ccusage peak-relative (fallback / alternative framing)
+  block_pct:         { name: '5h peak 12%',        fn: s => ({t: `5h ${s.blockUsed}%`, c: blockColor(s.blockUsed)}) },
+  block_proj:        { name: '5h peak 12%→45%',    fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}%`, c: blockColor(s.blockProj)}) },
+  block_combined:    { name: '5h peak 12%→45% 2h15m', fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}% ${minToHm(s.blockRem)}`, c: blockColor(s.blockProj)}) },
+  block_remaining:   { name: '4h2m left',          fn: s => ({t: `${minToHm(s.blockRem)} left`, c: 'fg-muted'}) },
+  weekly:            { name: 'wk peak 23%',        fn: s => ({t: `${s.weekly}%`, c: 'fg-muted'}) },
+  weekly_label:      { name: 'wk peak 23% (labeled)', fn: s => ({t: `wk ${s.weekly}%`, c: 'fg-muted'}) },
   burn_rate:         { name: 'burn 9.4K/min',      fn: s => ({t: `${s.burn}K/min`, c: burnColor(s.burn)}) },
   burn_emoji:        { name: 'burn 🔥 9.4K/min',   fn: s => ({t: `${burnEmoji(s.burn)} ${s.burn}K/min`, c: burnColor(s.burn)}) },
   sparkline:         { name: 'sparkline ▁▂▄▆█',    fn: s => ({t: fakeSpark(s.burn), c: burnColor(s.burn)}) },
@@ -375,6 +393,10 @@ const BASH_EXPR = {
   ctx_pct_label:     '"ctx ${ctx_pct}%"',
   ctx_pct:           '"${ctx_pct}%"',
   cost_session:      '"\\$$session_cost"',
+  plan_5h:           '"5h ${plan_5h}%"',
+  plan_5h_reset:     '"5h ${plan_5h}% ${block_rem}"',
+  plan_week:         '"wk ${plan_week}%"',
+  plan_week_reset:   '"wk ${plan_week}% ${week_rem_d}d"',
   block_combined:    '"5h ${block_pct}%→${block_proj}% ${block_rem}"',
   weekly_label:      '"wk ${weekly_pct}%"',
   time:              '"$(date +%H:%M)"',
@@ -423,10 +445,41 @@ ctx_pct=$(j '.context_window.used_percentage // empty')
 [[ -z "$ctx_pct" ]] && ctx_pct=0
 ctx_pct=\${ctx_pct%.*}
 
-# These need ccusage; left as placeholders. Wire them in if you want
-# the burn / 5h / weekly numbers live (see ccusage.com/guide/statusline).
+# Plan-relative limits — Claude Code 2.1.80+ exposes these in stdin JSON.
+# These match the Claude.ai usage panel exactly. They may be absent
+# (older harness, or before the first API response of the session).
+plan_5h=$(j '.rate_limits.five_hour.used_percentage // empty')
+plan_5h=\${plan_5h%.*}; [[ -z "$plan_5h" ]] && plan_5h="?"
+plan_week=$(j '.rate_limits.seven_day.used_percentage // empty')
+plan_week=\${plan_week%.*}; [[ -z "$plan_week" ]] && plan_week="?"
+
+# 5h reset countdown from resets_at timestamp.
+block_rem="?"
+resets_at=$(j '.rate_limits.five_hour.resets_at // empty')
+if [[ -n "$resets_at" ]]; then
+  reset_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S' "\${resets_at%%.*}" '+%s' 2>/dev/null \\
+            || date -d "$resets_at" '+%s' 2>/dev/null || echo 0)
+  if [[ "$reset_epoch" -gt 0 ]]; then
+    rem_min=$(( (reset_epoch - $(date +%s)) / 60 ))
+    [[ "$rem_min" -gt 0 ]] && block_rem="$((rem_min/60))h$((rem_min%60))m"
+  fi
+fi
+
+# Days until weekly reset.
+week_rem_d="?"
+week_resets_at=$(j '.rate_limits.seven_day.resets_at // empty')
+if [[ -n "$week_resets_at" ]]; then
+  week_reset_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S' "\${week_resets_at%%.*}" '+%s' 2>/dev/null \\
+                 || date -d "$week_resets_at" '+%s' 2>/dev/null || echo 0)
+  if [[ "$week_reset_epoch" -gt 0 ]]; then
+    week_rem_d=$(( (week_reset_epoch - $(date +%s)) / 86400 ))
+  fi
+fi
+
+# Cost / ccusage-derived peak-relative metrics — wire ccusage calls here if
+# you need them (see ccusage.com/guide/statusline). Left as placeholders.
 session_cost="0.00"
-block_pct="0"; block_proj="0"; block_rem="0h00m"
+block_pct="0"; block_proj="0"
 weekly_pct="0"
 
 ${lineExprs}
@@ -596,14 +649,14 @@ function renderPalette() {
 // ---------- presets ----------
 const PRESETS = [
   {
-    name: 'Your current (slowbro)',
-    desc: 'project/session · cwd (branch) · model + ctx | 5h | wk',
+    name: 'Plan-relative two-line (recommended)',
+    desc: 'Uses .rate_limits.* — matches Anthropic’s usage panel exactly.',
     source: 'Local — ~/.claude/statusline.sh',
     url: null,
     sep: ' · ',
     lines: [
       ['project_session', 'dir', 'branch_dirty', 'model'],
-      ['ctx_pct_label', 'block_combined', 'weekly_label'],
+      ['ctx_pct_label', 'plan_5h_reset', 'plan_week_reset'],
     ],
   },
   {
@@ -741,6 +794,9 @@ bind('in-ahead', 'ahead', v => +v || 0);
 bind('in-behind', 'behind', v => +v || 0);
 bind('in-ctx-pct', 'ctxPct', v => +v);
 bind('in-ctx-size', 'ctxSize', v => +v);
+bind('in-plan-5h', 'plan5h', v => +v);
+bind('in-plan-week', 'planWeek', v => +v);
+bind('in-week-rem-d', 'weekRemD', v => +v);
 bind('in-cost-session', 'costSession', v => +v);
 bind('in-cost-today', 'costToday', v => +v);
 bind('in-block-used', 'blockUsed', v => +v);

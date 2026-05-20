@@ -8,7 +8,7 @@ Single self-contained HTML file. No build step, no dependencies, runs offline.
 
 ## What it does
 
-- **Simulated session JSON** — edit the fields Claude Code passes on stdin (`session_id`, `model.display_name`, `workspace.project_dir`, `transcript_path`, git state, context %, cost, 5-hour block, weekly burn, cache TTL, ...) and watch the preview update.
+- **Simulated session JSON** — edit the fields Claude Code passes on stdin (`session_id`, `model.display_name`, `workspace.project_dir`, `transcript_path`, git state, context %, `rate_limits.five_hour.used_percentage`, `rate_limits.seven_day.used_percentage`, cost, cache TTL, ...) and watch the preview update.
 - **Drag-and-drop layout editor** — compose one or more lines from a palette of ~30 widgets. Reorder by dragging, remove by clicking ×, add lines as needed.
 - **Live terminal preview** — black-background monospace preview with threshold-banded coloring (green/yellow/red) for context, block, and burn rate.
 - **Preset library** — one-click load of layouts inspired by:
@@ -43,7 +43,16 @@ Once you've designed a layout you like:
    }
    ```
 
-4. For ccusage-derived numbers (burn rate, 5h block, weekly), see the [ccusage statusline guide](https://ccusage.com/guide/statusline) and graft the relevant `cached_call ... ccusage blocks/weekly --json` blocks into the generated script. Refer to Anthropic's [statusline docs](https://code.claude.com/docs/en/statusline) for the full stdin schema.
+4. For ccusage-derived numbers (burn rate, cost, peak-relative comparisons), see the [ccusage statusline guide](https://ccusage.com/guide/statusline) and graft the relevant `cached_call ... ccusage blocks/weekly --json` blocks into the generated script. Refer to Anthropic's [statusline docs](https://code.claude.com/docs/en/statusline) for the full stdin schema.
+
+### Plan-relative vs peak-relative
+
+There are two different definitions of "5h" and "weekly" floating around:
+
+- **Plan-relative** (`rate_limits.five_hour.used_percentage`, `rate_limits.seven_day.used_percentage`): matches the percentage Anthropic shows in the Claude.ai usage panel and the Claude Code sidebar. Available in stdin JSON starting Claude Code 2.1.80, only after the first API response of the session and only for subscribers. **Use this when you can.**
+- **Peak-relative** (`ccusage blocks/weekly`): current period as a percentage of your historical peak. Different denominator, different number. Useful as a fallback or as a "how heavy is this week relative to my norm?" gauge.
+
+The lab generates a script that prefers plan-relative and falls back to ccusage when the harness field is absent.
 
 ## Roadmap / gaps
 
