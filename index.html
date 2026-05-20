@@ -325,39 +325,42 @@ const state = {
   model: 'Claude Sonnet 4.5',
   // .version, .output_style.name
   version: '2.1.145',
-  outputStyle: 'default',
+  output_style: 'default',
   // .workspace.*
   project_dir: '/Users/you/projects/example',
-  wsWorktree: '',
-  repoHost: '', repoOwner: '', repoName: '',
-  addedDirs: [],
+  ws_worktree: '',
+  repo_host: '', repo_owner: '', repo_name: '',
+  added_dirs: [],
   // git (derived, not on stdin schema directly but needed for the widgets)
   branch: 'main', dirty: false, ahead: 0, behind: 0,
   // .context_window.*
-  ctxPct: 22, ctxSize: 1000,
-  inputTokens: 220, outputTokens: 1200,
-  cacheRead: 180, cacheWrite: 40,
+  ctx_pct: 22, ctx_size: 1000,
+  input_tokens: 220, output_tokens: 1200,
+  cache_read: 180, cache_write: 40,
   // .rate_limits.* (plan-relative)
-  plan5h: 4, planWeek: 27,
-  blockRem: 241,    // minutes until 5h reset (derived from resets_at)
-  weekRemD: 4,      // days until weekly reset
+  plan_5h: 4, plan_week: 27,
+  block_rem: 241,   // minutes until 5h reset (derived from resets_at)
+  week_rem_d: 4,    // days until weekly reset
   // .effort.level, .thinking.enabled, .vim.mode
-  effort: '', thinkingEnabled: false, vimMode: '',
+  effort: '', thinking_enabled: false, vim_mode: '',
   // .worktree.* (--worktree session)
-  wtName: '', wtBranch: '', wtOriginalBranch: '',
+  wt_name: '', wt_branch: '', wt_original_branch: '',
   // .pr.*
-  prNumber: '', prState: '',
+  pr_number: '', pr_state: '',
   // .agent.* (--agent flag)
-  agentName: '', agentType: '',
+  agent_name: '', agent_type: '',
   // ccusage peak-relative fallback
-  costSession: 0.31, costToday: 2.40,
-  blockUsed: 12, blockProj: 45, weekly: 23,
-  burn: 9.4, cacheTtl: 82,
+  cost_session: 0.31, cost_today: 2.40,
+  block_used: 12, block_proj: 45, weekly: 23,
+  burn: 9.4, cache_ttl: 82,
   sep: ' · ',
   color: true,
+  // Default layout uses plan-relative widgets (.rate_limits.*) so the
+  // numbers match Anthropic's usage panel out of the box. ccusage
+  // peak-relative widgets remain available in the palette.
   lines: [
     ['project_session', 'dir', 'branch_dirty', 'model'],
-    ['ctx_pct_label', 'block_combined', 'weekly_label'],
+    ['ctx_pct_label', 'plan_5h_reset', 'plan_week_reset'],
   ],
 };
 
@@ -413,16 +416,16 @@ function moonPhase() {
 
 // ---------- widgets ----------
 const WIDGETS = {
-  session:           { name: 'session [id8]',     fn: s => ({t: `[${s.session_id.slice(0,8)}]`, c: 'fg-muted'}) },
-  session_long:      { name: 'session [id12]',    fn: s => ({t: `[${s.session_id.slice(0,12)}]`, c: 'fg-muted'}) },
-  project:           { name: 'project name',       fn: s => ({t: deriveProject(s), c: 'fg-cyan'}) },
-  project_session:   { name: 'project/session',    fn: s => ({t: `${deriveProject(s)}/${s.session_id.slice(0,8)}`, c: 'fg-cyan'}) },
-  dir:               { name: 'cwd (~)',            fn: s => ({t: tildify(s.project_dir), c: 'fg-accent bold'}) },
-  model:             { name: 'model',              fn: s => ({t: s.model, c: 'fg-magenta'}) },
-  model_short:       { name: 'model [2-letter]',   fn: s => ({t: `[${shortModel(s.model)}]`, c: 'fg-magenta'}) },
+  session:           { name: 'session [id8]', bash: '"[${session_id:0:8}]"',     fn: s => ({t: `[${s.session_id.slice(0,8)}]`, c: 'fg-muted'}) },
+  session_long:      { name: 'session [id12]', bash: '"[${session_id:0:12}]"',    fn: s => ({t: `[${s.session_id.slice(0,12)}]`, c: 'fg-muted'}) },
+  project:           { name: 'project name', bash: '"$project_name"',       fn: s => ({t: deriveProject(s), c: 'fg-cyan'}) },
+  project_session:   { name: 'project/session', bash: '"${project_name}/${session_id:0:8}"',    fn: s => ({t: `${deriveProject(s)}/${s.session_id.slice(0,8)}`, c: 'fg-cyan'}) },
+  dir:               { name: 'cwd (~)', bash: '"$dir_disp"',            fn: s => ({t: tildify(s.project_dir), c: 'fg-accent bold'}) },
+  model:             { name: 'model', bash: '"$model"',              fn: s => ({t: s.model, c: 'fg-magenta'}) },
+  model_short:       { name: 'model [2-letter]', bash: '"[$model_short]"',   fn: s => ({t: `[${shortModel(s.model)}]`, c: 'fg-magenta'}) },
   model_emoji:       { name: 'model emoji',        fn: s => ({t: modelEmoji(s.model), c: ''}) },
-  branch:            { name: 'branch (main)',      fn: s => ({t: s.branch ? `(${s.branch})` : '', c: 'fg-yellow'}) },
-  branch_dirty:      { name: 'branch + dirty *',   fn: s => ({t: s.branch ? `(${s.branch}${s.dirty?'*':''})` : '', c: 'fg-yellow'}) },
+  branch:            { name: 'branch (main)', bash: '"(${branch})"',      fn: s => ({t: s.branch ? `(${s.branch})` : '', c: 'fg-yellow'}) },
+  branch_dirty:      { name: 'branch + dirty *', bash: '"(${branch}${dirty})"',   fn: s => ({t: s.branch ? `(${s.branch}${s.dirty?'*':''})` : '', c: 'fg-yellow'}) },
   branch_ahead_behind: { name: 'branch + ↑↓',      fn: s => {
     if (!s.branch) return {t: '', c: ''};
     let ex = '';
@@ -430,85 +433,85 @@ const WIDGETS = {
     if (s.behind) ex += `↓${s.behind}`;
     return {t: `(${s.branch}${s.dirty?'*':''}${ex?' '+ex:''})`, c: 'fg-yellow'};
   } },
-  ctx_pct:           { name: 'ctx 22%',            fn: s => ({t: `${s.ctxPct}%`, c: ctxColor(s.ctxPct)}) },
-  ctx_pct_label:     { name: 'ctx 22% (labeled)',  fn: s => ({t: `ctx ${s.ctxPct}%`, c: ctxColor(s.ctxPct)}) },
+  ctx_pct:           { name: 'ctx 22%', bash: '"${ctx_pct}%"',            fn: s => ({t: `${s.ctx_pct}%`, c: ctxColor(s.ctx_pct)}) },
+  ctx_pct_label:     { name: 'ctx 22% (labeled)', bash: '"ctx ${ctx_pct}%"',  fn: s => ({t: `ctx ${s.ctx_pct}%`, c: ctxColor(s.ctx_pct)}) },
   ctx_raw:           { name: 'ctx 220K/1000K',     fn: s => {
-    const u = Math.round(s.ctxSize * s.ctxPct / 100);
-    return {t: `${u}K/${s.ctxSize}K`, c: ctxColor(s.ctxPct)};
+    const u = Math.round(s.ctx_size * s.ctx_pct / 100);
+    return {t: `${u}K/${s.ctx_size}K`, c: ctxColor(s.ctx_pct)};
   } },
-  ctx_bar:           { name: 'ctx ████░░░░░░',     fn: s => ({t: bar(s.ctxPct, 10, '█', '░'), c: ctxColor(s.ctxPct)}) },
-  ctx_bar_dots:      { name: 'ctx •••∘∘∘∘∘∘∘',     fn: s => ({t: bar(s.ctxPct, 10, '●', '○'), c: ctxColor(s.ctxPct)}) },
+  ctx_bar:           { name: 'ctx ████░░░░░░',     fn: s => ({t: bar(s.ctx_pct, 10, '█', '░'), c: ctxColor(s.ctx_pct)}) },
+  ctx_bar_dots:      { name: 'ctx •••∘∘∘∘∘∘∘',     fn: s => ({t: bar(s.ctx_pct, 10, '●', '○'), c: ctxColor(s.ctx_pct)}) },
   ctx_full:          { name: 'ctx bar + raw + %',  fn: s => {
-    const u = Math.round(s.ctxSize * s.ctxPct / 100);
-    return {t: `${bar(s.ctxPct,10,'█','░')} ${s.ctxPct}% (${u}K/${s.ctxSize}K)`, c: ctxColor(s.ctxPct)};
+    const u = Math.round(s.ctx_size * s.ctx_pct / 100);
+    return {t: `${bar(s.ctx_pct,10,'█','░')} ${s.ctx_pct}% (${u}K/${s.ctx_size}K)`, c: ctxColor(s.ctx_pct)};
   } },
-  cost_session:      { name: 'cost $0.31',         fn: s => ({t: `$${s.costSession.toFixed(2)}`, c: 'fg-green'}) },
-  cost_today:        { name: 'today $2.40',        fn: s => ({t: `today $${s.costToday.toFixed(2)}`, c: 'fg-green'}) },
+  cost_session:      { name: 'cost $0.31', bash: '"\\$$session_cost"',         fn: s => ({t: `$${s.cost_session.toFixed(2)}`, c: 'fg-green'}) },
+  cost_today:        { name: 'today $2.40',        fn: s => ({t: `today $${s.cost_today.toFixed(2)}`, c: 'fg-green'}) },
   // Plan-relative (matches Anthropic's usage panel exactly)
-  plan_5h:           { name: '5h plan 4%',         fn: s => ({t: `5h ${s.plan5h}%`, c: blockColor(s.plan5h)}) },
-  plan_5h_reset:     { name: '5h plan 4% (4h2m)',  fn: s => ({t: `5h ${s.plan5h}% ${minToHm(s.blockRem)}`, c: blockColor(s.plan5h)}) },
-  plan_week:         { name: 'wk plan 27%',        fn: s => ({t: `wk ${s.planWeek}%`, c: blockColor(s.planWeek)}) },
-  plan_week_reset:   { name: 'wk plan 27% (4d)',   fn: s => ({t: `wk ${s.planWeek}% ${s.weekRemD}d`, c: blockColor(s.planWeek)}) },
+  plan_5h:           { name: '5h plan 4%', bash: '"5h ${plan_5h}%"',         fn: s => ({t: `5h ${s.plan_5h}%`, c: blockColor(s.plan_5h)}) },
+  plan_5h_reset:     { name: '5h plan 4% (4h2m)', bash: '"5h ${plan_5h}% ${block_rem}"',  fn: s => ({t: `5h ${s.plan_5h}% ${minToHm(s.block_rem)}`, c: blockColor(s.plan_5h)}) },
+  plan_week:         { name: 'wk plan 27%', bash: '"wk ${plan_week}%"',        fn: s => ({t: `wk ${s.plan_week}%`, c: blockColor(s.plan_week)}) },
+  plan_week_reset:   { name: 'wk plan 27% (4d)', bash: '"wk ${plan_week}% ${week_rem_d}d"',   fn: s => ({t: `wk ${s.plan_week}% ${s.week_rem_d}d`, c: blockColor(s.plan_week)}) },
   // ccusage peak-relative (fallback / alternative framing)
-  block_pct:         { name: '5h peak 12%',        fn: s => ({t: `5h ${s.blockUsed}%`, c: blockColor(s.blockUsed)}) },
-  block_proj:        { name: '5h peak 12%→45%',    fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}%`, c: blockColor(s.blockProj)}) },
-  block_combined:    { name: '5h peak 12%→45% 2h15m', fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}% ${minToHm(s.blockRem)}`, c: blockColor(s.blockProj)}) },
-  block_remaining:   { name: '4h2m left',          fn: s => ({t: `${minToHm(s.blockRem)} left`, c: 'fg-muted'}) },
+  block_pct:         { name: '5h peak 12%',        fn: s => ({t: `5h ${s.block_used}%`, c: blockColor(s.block_used)}) },
+  block_proj:        { name: '5h peak 12%→45%',    fn: s => ({t: `5h ${s.block_used}%→${s.block_proj}%`, c: blockColor(s.block_proj)}) },
+  block_combined:    { name: '5h peak 12%→45% 2h15m', bash: '"5h ${block_pct}%→${block_proj}% ${block_rem}"', fn: s => ({t: `5h ${s.block_used}%→${s.block_proj}% ${minToHm(s.block_rem)}`, c: blockColor(s.block_proj)}) },
+  block_remaining:   { name: '4h2m left',          fn: s => ({t: `${minToHm(s.block_rem)} left`, c: 'fg-muted'}) },
   weekly:            { name: 'wk peak 23%',        fn: s => ({t: `${s.weekly}%`, c: 'fg-muted'}) },
-  weekly_label:      { name: 'wk peak 23% (labeled)', fn: s => ({t: `wk ${s.weekly}%`, c: 'fg-muted'}) },
+  weekly_label:      { name: 'wk peak 23% (labeled)', bash: '"wk ${weekly_pct}%"', fn: s => ({t: `wk ${s.weekly}%`, c: 'fg-muted'}) },
   burn_rate:         { name: 'burn 9.4K/min',      fn: s => ({t: `${s.burn}K/min`, c: burnColor(s.burn)}) },
   burn_emoji:        { name: 'burn 🔥 9.4K/min',   fn: s => ({t: `${burnEmoji(s.burn)} ${s.burn}K/min`, c: burnColor(s.burn)}) },
   sparkline:         { name: 'sparkline ▁▂▄▆█',    fn: s => ({t: fakeSpark(s.burn), c: burnColor(s.burn)}) },
-  cache_ttl:         { name: 'cache 1m22s',        fn: s => ({t: `cache ${secToMs(s.cacheTtl)}`, c: cacheColor(s.cacheTtl)}) },
+  cache_ttl:         { name: 'cache 1m22s',        fn: s => ({t: `cache ${secToMs(s.cache_ttl)}`, c: cacheColor(s.cache_ttl)}) },
   // worktree from .worktree.* (only present in --worktree session)
-  worktree:          { name: 'wt:name',            fn: s => s.wtName ? {t: `wt:${s.wtName}`, c: 'fg-orange'} : {t: '', c: ''} },
-  worktree_branch:   { name: 'wt branch',          fn: s => s.wtBranch ? {t: `wt:${s.wtName||'?'}@${s.wtBranch}`, c: 'fg-orange'} : {t: '', c: ''} },
-  worktree_orig_branch: { name: 'wt ← origBr',     fn: s => s.wtOriginalBranch ? {t: `← ${s.wtOriginalBranch}`, c: 'fg-muted'} : {t: '', c: ''} },
-  ws_git_worktree:   { name: 'workspace.git_worktree', fn: s => s.wsWorktree ? {t: `[${s.wsWorktree}]`, c: 'fg-orange'} : {t: '', c: ''} },
+  worktree:          { name: 'wt:name', bash: '"wt:$wt_name"',            fn: s => s.wt_name ? {t: `wt:${s.wt_name}`, c: 'fg-orange'} : {t: '', c: ''} },
+  worktree_branch:   { name: 'wt branch', bash: '"wt:${wt_name}@${wt_branch}"',          fn: s => s.wt_branch ? {t: `wt:${s.wt_name||'?'}@${s.wt_branch}`, c: 'fg-orange'} : {t: '', c: ''} },
+  worktree_orig_branch: { name: 'wt ← origBr', bash: '"← $wt_original_branch"',     fn: s => s.wt_original_branch ? {t: `← ${s.wt_original_branch}`, c: 'fg-muted'} : {t: '', c: ''} },
+  ws_git_worktree:   { name: 'workspace.git_worktree', bash: '"[$ws_git_worktree]"', fn: s => s.ws_worktree ? {t: `[${s.ws_worktree}]`, c: 'fg-orange'} : {t: '', c: ''} },
   // Misc / time
-  time:              { name: 'time 16:52',         fn: () => {
+  time:              { name: 'time 16:52', bash: '"$(date +%H:%M)"',         fn: () => {
     const d = new Date();
     return {t: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`, c: 'fg-muted'};
   } },
   moon:              { name: 'moon 🌒',            fn: () => ({t: moonPhase(), c: ''}) },
   mcp_health:        { name: 'mcp 5/5',            fn: () => ({t: 'mcp 5/5', c: 'fg-green'}) },
   // New: identity + harness fields
-  session_name:      { name: 'session_name',       fn: s => s.session_name ? {t: s.session_name, c: 'fg-cyan'} : {t: '', c: ''} },
-  cc_version:        { name: 'cc 2.1.145',         fn: s => ({t: `cc ${s.version}`, c: 'fg-muted'}) },
-  output_style:      { name: 'style: default',     fn: s => ({t: `style:${s.outputStyle}`, c: 'fg-muted'}) },
-  repo:              { name: 'owner/repo',         fn: s => (s.repoOwner && s.repoName) ? {t: `${s.repoOwner}/${s.repoName}`, c: 'fg-cyan'} : {t: '', c: ''} },
-  repo_host:         { name: 'repo host',          fn: s => s.repoHost ? {t: s.repoHost, c: 'fg-muted'} : {t: '', c: ''} },
-  added_dirs:        { name: '+N dirs',            fn: s => s.addedDirs.length > 0 ? {t: `+${s.addedDirs.length} dirs`, c: 'fg-muted'} : {t: '', c: ''} },
-  added_dir_first:   { name: '+ dirname',          fn: s => s.addedDirs.length > 0 ? {t: `+${s.addedDirs[0].split('/').pop()}`, c: 'fg-muted'} : {t: '', c: ''} },
+  session_name:      { name: 'session_name', bash: '"$session_name"',       fn: s => s.session_name ? {t: s.session_name, c: 'fg-cyan'} : {t: '', c: ''} },
+  cc_version:        { name: 'cc 2.1.145', bash: '"cc $cc_version"',         fn: s => ({t: `cc ${s.version}`, c: 'fg-muted'}) },
+  output_style:      { name: 'style: default', bash: '"style:$output_style"',     fn: s => ({t: `style:${s.output_style}`, c: 'fg-muted'}) },
+  repo:              { name: 'owner/repo', bash: '"${repo_owner}/${repo_name}"',         fn: s => (s.repo_owner && s.repo_name) ? {t: `${s.repo_owner}/${s.repo_name}`, c: 'fg-cyan'} : {t: '', c: ''} },
+  repo_host:         { name: 'repo host', bash: '"$repo_host"',          fn: s => s.repo_host ? {t: s.repo_host, c: 'fg-muted'} : {t: '', c: ''} },
+  added_dirs:        { name: '+N dirs', bash: '"+${added_dirs} dirs"',            fn: s => s.added_dirs.length > 0 ? {t: `+${s.added_dirs.length} dirs`, c: 'fg-muted'} : {t: '', c: ''} },
+  added_dir_first:   { name: '+ dirname', bash: '"+$added_dir_first"',          fn: s => s.added_dirs.length > 0 ? {t: `+${s.added_dirs[0].split('/').pop()}`, c: 'fg-muted'} : {t: '', c: ''} },
   // Context token detail
-  ctx_input_tokens:  { name: 'in 220K',            fn: s => ({t: `in ${s.inputTokens}K`, c: 'fg-muted'}) },
-  ctx_output_tokens: { name: 'out 1200',           fn: s => ({t: `out ${s.outputTokens}`, c: 'fg-muted'}) },
-  cache_hit_ratio:   { name: 'cache 82%',          fn: s => {
-    const t = s.cacheRead + s.cacheWrite;
-    return t > 0 ? {t: `cache ${Math.round(s.cacheRead * 100 / t)}%`, c: 'fg-green'} : {t: '', c: ''};
+  ctx_input_tokens:  { name: 'in 220K', bash: '"in ${input_tokens_k}K"',            fn: s => ({t: `in ${s.input_tokens}K`, c: 'fg-muted'}) },
+  ctx_output_tokens: { name: 'out 1200', bash: '"out $output_tokens"',           fn: s => ({t: `out ${s.output_tokens}`, c: 'fg-muted'}) },
+  cache_hit_ratio:   { name: 'cache 82%', bash: '"cache ${cache_hit_pct}%"',          fn: s => {
+    const t = s.cache_read + s.cache_write;
+    return t > 0 ? {t: `cache ${Math.round(s.cache_read * 100 / t)}%`, c: 'fg-green'} : {t: '', c: ''};
   } },
   // Agent state — now wired to real fields
-  effort_level:      { name: 'effort:high',        fn: s => {
+  effort_level:      { name: 'effort:high', bash: '"effort:$effort"',        fn: s => {
     if (!s.effort) return {t: '', c: ''};
     const cls = {low:'fg-muted', medium:'fg-yellow', high:'fg-orange', xhigh:'fg-orange', max:'fg-red'}[s.effort] || '';
     return {t: `effort:${s.effort}`, c: cls};
   } },
-  thinking_enabled:  { name: '🧠 (when on)',       fn: s => s.thinkingEnabled ? {t: '🧠', c: 'fg-magenta'} : {t: '', c: ''} },
-  vim_mode:          { name: '-- NORMAL --',       fn: s => {
-    if (!s.vimMode) return {t: '', c: ''};
-    const cls = {NORMAL:'fg-green', INSERT:'fg-cyan', VISUAL:'fg-magenta', 'VISUAL LINE':'fg-magenta'}[s.vimMode] || '';
-    return {t: `-- ${s.vimMode} --`, c: cls};
+  thinking_enabled:  { name: '🧠 (when on)', bash: '"$thinking_glyph"',       fn: s => s.thinking_enabled ? {t: '🧠', c: 'fg-magenta'} : {t: '', c: ''} },
+  vim_mode:          { name: '-- NORMAL --', bash: '"-- $vim_mode --"',       fn: s => {
+    if (!s.vim_mode) return {t: '', c: ''};
+    const cls = {NORMAL:'fg-green', INSERT:'fg-cyan', VISUAL:'fg-magenta', 'VISUAL LINE':'fg-magenta'}[s.vim_mode] || '';
+    return {t: `-- ${s.vim_mode} --`, c: cls};
   } },
   // --agent flag
-  agent_name:        { name: 'agent:name',         fn: s => s.agentName ? {t: `agent:${s.agentName}`, c: 'fg-magenta'} : {t: '', c: ''} },
-  agent_type:        { name: 'agent type',         fn: s => s.agentType ? {t: `<${s.agentType}>`, c: 'fg-magenta'} : {t: '', c: ''} },
+  agent_name:        { name: 'agent:name', bash: '"agent:$agent_name"',         fn: s => s.agent_name ? {t: `agent:${s.agent_name}`, c: 'fg-magenta'} : {t: '', c: ''} },
+  agent_type:        { name: 'agent type', bash: '"<$agent_type>"',         fn: s => s.agent_type ? {t: `<${s.agent_type}>`, c: 'fg-magenta'} : {t: '', c: ''} },
   // PR badge
-  pr_number:         { name: 'PR #123',            fn: s => s.prNumber ? {t: `PR #${s.prNumber}`, c: 'fg-cyan'} : {t: '', c: ''} },
-  pr_state:          { name: 'PR + state',         fn: s => {
-    if (!s.prNumber) return {t: '', c: ''};
-    const cls = {approved:'fg-green', pending:'fg-yellow', changes_requested:'fg-red', draft:'fg-muted'}[s.prState] || 'fg-cyan';
-    const glyph = {approved:'✓', pending:'…', changes_requested:'✗', draft:'◌'}[s.prState] || '';
-    return {t: `PR #${s.prNumber}${glyph ? ' '+glyph : ''}`, c: cls};
+  pr_number:         { name: 'PR #123', bash: '"PR #$pr_number"',            fn: s => s.pr_number ? {t: `PR #${s.pr_number}`, c: 'fg-cyan'} : {t: '', c: ''} },
+  pr_state:          { name: 'PR + state', bash: '"PR #$pr_number $pr_glyph"',         fn: s => {
+    if (!s.pr_number) return {t: '', c: ''};
+    const cls = {approved:'fg-green', pending:'fg-yellow', changes_requested:'fg-red', draft:'fg-muted'}[s.pr_state] || 'fg-cyan';
+    const glyph = {approved:'✓', pending:'…', changes_requested:'✗', draft:'◌'}[s.pr_state] || '';
+    return {t: `PR #${s.pr_number}${glyph ? ' '+glyph : ''}`, c: cls};
   } },
 };
 
@@ -536,52 +539,10 @@ function renderRaw() {
 }
 
 // ---------- bash codegen ----------
-const BASH_EXPR = {
-  session:           '"[${session_id:0:8}]"',
-  session_long:      '"[${session_id:0:12}]"',
-  session_name:      '"$session_name"',
-  project:           '"$project_name"',
-  project_session:   '"${project_name}/${session_id:0:8}"',
-  dir:               '"$dir_disp"',
-  model:             '"$model"',
-  model_short:       '"[$model_short]"',
-  cc_version:        '"cc $cc_version"',
-  output_style:      '"style:$output_style"',
-  repo:              '"${repo_owner}/${repo_name}"',
-  repo_host:         '"$repo_host"',
-  added_dirs:        '"+${added_dirs} dirs"',
-  added_dir_first:   '"+$added_dir_first"',
-  branch:            '"(${branch})"',
-  branch_dirty:      '"(${branch}${dirty})"',
-  ctx_pct_label:     '"ctx ${ctx_pct}%"',
-  ctx_pct:           '"${ctx_pct}%"',
-  ctx_input_tokens:  '"in ${input_tokens_k}K"',
-  ctx_output_tokens: '"out $output_tokens"',
-  cache_hit_ratio:   '"cache ${cache_hit_pct}%"',
-  cost_session:      '"\\$$session_cost"',
-  plan_5h:           '"5h ${plan_5h}%"',
-  plan_5h_reset:     '"5h ${plan_5h}% ${block_rem}"',
-  plan_week:         '"wk ${plan_week}%"',
-  plan_week_reset:   '"wk ${plan_week}% ${week_rem_d}d"',
-  block_combined:    '"5h ${block_pct}%→${block_proj}% ${block_rem}"',
-  weekly_label:      '"wk ${weekly_pct}%"',
-  effort_level:      '"effort:$effort"',
-  thinking_enabled:  '"$thinking_glyph"',
-  vim_mode:          '"-- $vim_mode --"',
-  agent_name:        '"agent:$agent_name"',
-  agent_type:        '"<$agent_type>"',
-  pr_number:         '"PR #$pr_number"',
-  pr_state:          '"PR #$pr_number $pr_glyph"',
-  worktree:          '"wt:$wt_name"',
-  worktree_branch:   '"wt:${wt_name}@${wt_branch}"',
-  worktree_orig_branch: '"← $wt_original_branch"',
-  ws_git_worktree:   '"[$ws_git_worktree]"',
-  time:              '"$(date +%H:%M)"',
-};
 function generateBash() {
   const sep = state.sep.replace(/'/g, `'\\''`);
   const lineExprs = state.lines.map((line, i) => {
-    const parts = line.map(k => BASH_EXPR[k] ?? `"<${k}>"`);
+    const parts = line.map(k => WIDGETS[k]?.bash ?? `"<${k}>"`);
     if (parts.length === 0) return '';
     // Emit one printf per line with a %s placeholder for each (widget,
     // separator, widget, ...) argument. printf reuses its format string
@@ -842,7 +803,7 @@ function resetToCurrent() {
   mutate(() => {
     state.lines = [
       ['project_session', 'dir', 'branch_dirty', 'model'],
-      ['ctx_pct_label', 'block_combined', 'weekly_label'],
+      ['ctx_pct_label', 'plan_5h_reset', 'plan_week_reset'],
     ];
     state.sep = ' · ';
   });
@@ -1123,45 +1084,45 @@ bind('in-session-id', 'session_id');
 bind('in-session-name', 'session_name');
 bind('in-model', 'model');
 bind('in-version', 'version');
-bind('in-output-style', 'outputStyle');
+bind('in-output-style', 'output_style');
 bind('in-project-dir', 'project_dir');
 bind('in-transcript', 'transcript');
-bind('in-ws-worktree', 'wsWorktree');
-bind('in-repo-host', 'repoHost');
-bind('in-repo-owner', 'repoOwner');
-bind('in-repo-name', 'repoName');
-bind('in-added-dirs', 'addedDirs', v => v.split(',').map(s => s.trim()).filter(Boolean));
+bind('in-ws-worktree', 'ws_worktree');
+bind('in-repo-host', 'repo_host');
+bind('in-repo-owner', 'repo_owner');
+bind('in-repo-name', 'repo_name');
+bind('in-added-dirs', 'added_dirs', v => v.split(',').map(s => s.trim()).filter(Boolean));
 bind('in-branch', 'branch');
 bind('in-dirty', 'dirty');
 bind('in-ahead', 'ahead', v => +v || 0);
 bind('in-behind', 'behind', v => +v || 0);
-bind('in-ctx-pct', 'ctxPct', v => +v);
-bind('in-ctx-size', 'ctxSize', v => +v);
-bind('in-input-tokens', 'inputTokens', v => +v || 0);
-bind('in-output-tokens', 'outputTokens', v => +v || 0);
-bind('in-cache-read', 'cacheRead', v => +v || 0);
-bind('in-cache-write', 'cacheWrite', v => +v || 0);
-bind('in-plan-5h', 'plan5h', v => +v);
-bind('in-plan-week', 'planWeek', v => +v);
-bind('in-week-rem-d', 'weekRemD', v => +v);
+bind('in-ctx-pct', 'ctx_pct', v => +v);
+bind('in-ctx-size', 'ctx_size', v => +v);
+bind('in-input-tokens', 'input_tokens', v => +v || 0);
+bind('in-output-tokens', 'output_tokens', v => +v || 0);
+bind('in-cache-read', 'cache_read', v => +v || 0);
+bind('in-cache-write', 'cache_write', v => +v || 0);
+bind('in-plan-5h', 'plan_5h', v => +v);
+bind('in-plan-week', 'plan_week', v => +v);
+bind('in-week-rem-d', 'week_rem_d', v => +v);
 bind('in-effort', 'effort');
-bind('in-thinking-enabled', 'thinkingEnabled', v => v === 'true' || v === true);
-bind('in-vim-mode', 'vimMode');
-bind('in-wt-name', 'wtName');
-bind('in-wt-branch', 'wtBranch');
-bind('in-wt-original-branch', 'wtOriginalBranch');
-bind('in-pr-number', 'prNumber');
-bind('in-pr-state', 'prState');
-bind('in-agent-name', 'agentName');
-bind('in-agent-type', 'agentType');
-bind('in-cost-session', 'costSession', v => +v);
-bind('in-cost-today', 'costToday', v => +v);
-bind('in-block-used', 'blockUsed', v => +v);
-bind('in-block-proj', 'blockProj', v => +v);
-bind('in-block-rem', 'blockRem', v => +v);
+bind('in-thinking-enabled', 'thinking_enabled', v => v === 'true' || v === true);
+bind('in-vim-mode', 'vim_mode');
+bind('in-wt-name', 'wt_name');
+bind('in-wt-branch', 'wt_branch');
+bind('in-wt-original-branch', 'wt_original_branch');
+bind('in-pr-number', 'pr_number');
+bind('in-pr-state', 'pr_state');
+bind('in-agent-name', 'agent_name');
+bind('in-agent-type', 'agent_type');
+bind('in-cost-session', 'cost_session', v => +v);
+bind('in-cost-today', 'cost_today', v => +v);
+bind('in-block-used', 'block_used', v => +v);
+bind('in-block-proj', 'block_proj', v => +v);
+bind('in-block-rem', 'block_rem', v => +v);
 bind('in-weekly', 'weekly', v => +v);
 bind('in-burn', 'burn', v => +v);
-bind('in-cache-ttl', 'cacheTtl', v => +v);
+bind('in-cache-ttl', 'cache_ttl', v => +v);
 document.getElementById('in-sep').addEventListener('change', e => {
   mutate(() => { state.sep = e.target.value; });
 });
