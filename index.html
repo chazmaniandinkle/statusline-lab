@@ -283,7 +283,9 @@
     <div id="lines" class="lines"></div>
     <div class="toolbar">
       <button onclick="addLine()">+ Add line</button>
-      <button onclick="resetToCurrent()">Reset to your current</button>
+      <button onclick="undo()" title="Undo (Cmd/Ctrl+Z)">↶ Undo</button>
+      <button onclick="resetToCurrent()">Reset layout</button>
+      <button onclick="clearStored()" title="Clear saved layout from localStorage">Clear saved</button>
       <button onclick="copyShellScript()">Copy bash script</button>
       <button onclick="copyRaw()">Copy raw output</button>
     </div>
@@ -728,6 +730,7 @@ function refresh() {
   document.getElementById('ctx-pct-display').textContent = state.ctxPct;
   renderLinesUI();
   renderPresets();
+  persistLayout();
 }
 function renderLinesUI() {
   const wrap = document.getElementById('lines');
@@ -754,8 +757,7 @@ function renderLinesUI() {
       x.className = 'x'; x.textContent = '×';
       x.onclick = e => {
         e.stopPropagation();
-        state.lines[lineIdx].splice(segIdx, 1);
-        refresh();
+        mutate(() => state.lines[lineIdx].splice(segIdx, 1));
       };
       seg.appendChild(x);
       seg.addEventListener('dragstart', dragStart);
@@ -772,7 +774,7 @@ function renderLinesUI() {
       const rm = document.createElement('button');
       rm.textContent = '−'; rm.title = 'Remove line';
       rm.style.flex = '0 0 auto';
-      rm.onclick = () => { state.lines.splice(lineIdx, 1); refresh(); };
+      rm.onclick = () => mutate(() => state.lines.splice(lineIdx, 1));
       row.appendChild(rm);
     }
     wrap.appendChild(row);
@@ -812,35 +814,84 @@ function drop(e) {
   if (!dragSrc) return;
   const targetLine = +e.currentTarget.dataset.lineIdx;
   const insertAt = computeInsertIdx(e.currentTarget, e.clientX);
-
-  if (dragSrc.dataset.source === 'palette') {
-    // New widget from palette — insert without removing anything.
-    const key = dragSrc.dataset.key;
-    state.lines[targetLine].splice(insertAt, 0, key);
-  } else {
-    // Existing seg being reordered or moved between lines.
-    const srcLine = +dragSrc.dataset.line;
-    const srcSeg = +dragSrc.dataset.seg;
-    const moved = state.lines[srcLine][srcSeg];
-    state.lines[srcLine].splice(srcSeg, 1);
-    let adjusted = insertAt;
-    if (srcLine === targetLine && srcSeg < insertAt) adjusted--;
-    adjusted = Math.max(0, Math.min(adjusted, state.lines[targetLine].length));
-    state.lines[targetLine].splice(adjusted, 0, moved);
-  }
-  refresh();
+  mutate(() => {
+    if (dragSrc.dataset.source === 'palette') {
+      const key = dragSrc.dataset.key;
+      state.lines[targetLine].splice(insertAt, 0, key);
+    } else {
+      const srcLine = +dragSrc.dataset.line;
+      const srcSeg = +dragSrc.dataset.seg;
+      const moved = state.lines[srcLine][srcSeg];
+      state.lines[srcLine].splice(srcSeg, 1);
+      let adjusted = insertAt;
+      if (srcLine === targetLine && srcSeg < insertAt) adjusted--;
+      adjusted = Math.max(0, Math.min(adjusted, state.lines[targetLine].length));
+      state.lines[targetLine].splice(adjusted, 0, moved);
+    }
+  });
 }
 
-function addLine() { state.lines.push([]); refresh(); }
+function addLine() { mutate(() => state.lines.push([])); }
 function resetToCurrent() {
-  state.lines = [
-    ['project_session', 'dir', 'branch_dirty', 'model'],
-    ['ctx_pct_label', 'block_combined', 'weekly_label'],
-  ];
-  state.sep = ' · ';
+  mutate(() => {
+    state.lines = [
+      ['project_session', 'dir', 'branch_dirty', 'model'],
+      ['ctx_pct_label', 'block_combined', 'weekly_label'],
+    ];
+    state.sep = ' · ';
+  });
   document.getElementById('in-sep').value = ' · ';
-  refresh();
 }
+
+// ---------- persistence + undo ----------
+const STORAGE_KEY = 'statusline-lab.v1';
+const MAX_UNDO = 30;
+const undoStack = [];
+function snapshotLayout() {
+  undoStack.push(JSON.stringify({lines: state.lines, sep: state.sep, color: state.color}));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+function mutate(fn) { snapshotLayout(); fn(); refresh(); }
+function undo() {
+  if (undoStack.length === 0) { flash('Nothing to undo'); return; }
+  const prev = JSON.parse(undoStack.pop());
+  state.lines = prev.lines;
+  state.sep = prev.sep;
+  state.color = prev.color;
+  document.getElementById('in-sep').value = prev.sep;
+  document.getElementById('in-color').checked = prev.color;
+  refresh();
+  flash('Undone');
+}
+function persistLayout() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      lines: state.lines, sep: state.sep, color: state.color,
+    }));
+  } catch {}
+}
+function restoreLayout() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (Array.isArray(saved.lines)) state.lines = saved.lines;
+    if (typeof saved.sep === 'string') state.sep = saved.sep;
+    if (typeof saved.color === 'boolean') state.color = saved.color;
+  } catch {}
+}
+function clearStored() {
+  if (!confirm('Clear saved layout and reload defaults?')) return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  resetToCurrent();
+}
+window.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+    if (e.target.matches('input,textarea,select')) return;
+    e.preventDefault();
+    undo();
+  }
+});
 async function copyShellScript() {
   await navigator.clipboard.writeText(generateBash());
   flash('Copied bash script. Save as ~/.claude/statusline.sh; chmod +x.');
@@ -871,9 +922,10 @@ function renderPalette() {
     c.dataset.key = key;
     c.title = 'Click to append, or drag onto a line';
     c.onclick = () => {
-      const last = state.lines[state.lines.length - 1] ?? state.lines[0];
-      last.push(key);
-      refresh();
+      mutate(() => {
+        const last = state.lines[state.lines.length - 1] ?? state.lines[0];
+        last.push(key);
+      });
     };
     c.addEventListener('dragstart', dragStart);
     c.addEventListener('dragend', dragEnd);
@@ -987,10 +1039,11 @@ function renderPresets() {
     card.className = 'preset-card';
     card.onclick = (e) => {
       if (e.target.tagName === 'A') return;
-      state.lines = p.lines.map(l => [...l]);
-      state.sep = p.sep;
+      mutate(() => {
+        state.lines = p.lines.map(l => [...l]);
+        state.sep = p.sep;
+      });
       document.getElementById('in-sep').value = p.sep;
-      refresh();
     };
     const sample = p.lines.map(line => {
       return line.map(k => {
@@ -1063,13 +1116,16 @@ bind('in-weekly', 'weekly', v => +v);
 bind('in-burn', 'burn', v => +v);
 bind('in-cache-ttl', 'cacheTtl', v => +v);
 document.getElementById('in-sep').addEventListener('change', e => {
-  state.sep = e.target.value; refresh();
+  mutate(() => { state.sep = e.target.value; });
 });
 document.getElementById('in-color').addEventListener('change', e => {
-  state.color = e.target.checked; refresh();
+  mutate(() => { state.color = e.target.checked; });
 });
 
 // ---------- init ----------
+restoreLayout();
+document.getElementById('in-sep').value = state.sep;
+document.getElementById('in-color').checked = state.color;
 renderPalette();
 refresh();
 </script>
