@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claude Code Statusline Lab</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #7ee787; --yellow: #f0e186; --red: #ff7b72; --magenta: #d2a8ff;
+    --orange: #ffa657; --cyan: #79c0ff;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, sans-serif; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 12px; margin: 16px 0 8px; text-transform: uppercase;
+       letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+  .intro { color: var(--muted); font-size: 12px; max-width: 80ch; }
+  .grid { display: grid; grid-template-columns: 320px 1fr 340px; gap: 16px;
+          margin-top: 16px; }
+  @media (max-width: 1200px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+           border-radius: 6px; padding: 12px; }
+  label { display: block; font-size: 11px; color: var(--muted);
+          margin: 4px 0 2px; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 6px; font: 12px var(--mono); margin-bottom: 6px;
+  }
+  input[type=range] { width: 100%; margin-bottom: 4px; }
+  input[type=checkbox] { margin-right: 4px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .row > * { flex: 1; }
+  .row > label { flex: 0 0 auto; }
+  .terminal {
+    background: #000; padding: 14px 16px 16px; border-radius: 6px;
+    font: 13px/1.5 var(--mono); white-space: pre; overflow-x: auto;
+    min-height: 80px;
+  }
+  .terminal::before {
+    content: "● ● ●"; color: #444; display: block; margin-bottom: 8px;
+    letter-spacing: 4px; font-size: 11px;
+  }
+  .fg-green { color: var(--green); }
+  .fg-yellow { color: var(--yellow); }
+  .fg-red { color: var(--red); }
+  .fg-magenta { color: var(--magenta); }
+  .fg-cyan { color: var(--cyan); }
+  .fg-orange { color: var(--orange); }
+  .fg-muted { color: var(--muted); }
+  .fg-accent { color: var(--accent); }
+  .bold { font-weight: 700; }
+  button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+  }
+  button:hover { background: #21262d; border-color: var(--accent); }
+  .toolbar { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .widget-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 2px 8px; font-size: 11px; font-family: var(--mono);
+    cursor: pointer; user-select: none;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .lines { display: flex; flex-direction: column; gap: 6px; }
+  .line-row { display: flex; gap: 8px; align-items: center; }
+  .line-label { font: 11px var(--mono); color: var(--muted); width: 24px; }
+  .seg-list { flex: 1; min-height: 32px; padding: 4px;
+              border: 1px dashed var(--border); border-radius: 4px;
+              display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .seg {
+    background: var(--bg); border: 1px solid var(--border);
+    padding: 2px 6px 2px 8px; border-radius: 4px; font: 11px var(--mono);
+    cursor: grab; user-select: none; display: inline-flex; gap: 4px; align-items: center;
+  }
+  .seg.dragging { opacity: 0.3; }
+  .seg .x { color: var(--muted); cursor: pointer; padding: 0 2px; }
+  .seg .x:hover { color: var(--red); }
+  .preset-card {
+    border: 1px solid var(--border); border-radius: 4px; padding: 8px;
+    margin-bottom: 6px; cursor: pointer;
+  }
+  .preset-card:hover { border-color: var(--accent); background: #1c2128; }
+  .preset-card h3 { margin: 0 0 2px; font-size: 12px; font-weight: 600; }
+  .preset-card .preview-mini { font: 11px/1.4 var(--mono); color: #8a9099;
+                                white-space: pre; background: #000;
+                                padding: 4px 6px; border-radius: 3px;
+                                margin: 4px 0; overflow-x: auto; }
+  .preset-card .desc { font-size: 11px; color: var(--muted); }
+  .preset-card .meta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .preset-card a { color: var(--accent); text-decoration: none; }
+  .preset-card a:hover { text-decoration: underline; }
+  .small { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  details > summary { cursor: pointer; padding: 4px 0; color: var(--muted);
+                      font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Claude Code Statusline Lab</h1>
+<div class="intro">Mock a session, drag widgets to compose lines, load community presets, copy the result as a bash script. All client-side; nothing leaves the page.</div>
+
+<div class="grid">
+  <!-- LEFT: simulated session JSON -->
+  <div class="panel">
+    <h2 style="margin-top:0">Simulated session</h2>
+    <label>session_id</label>
+    <input type="text" id="in-session-id" value="a1b2c3d4-e5f6-7890-abcd-ef0123456789">
+    <label>model.display_name</label>
+    <input type="text" id="in-model" value="Claude Sonnet 4.5">
+    <label>workspace.project_dir</label>
+    <input type="text" id="in-project-dir" value="/Users/slowbro/workspaces/cog">
+    <label>transcript_path <span class="small">(project name comes from this)</span></label>
+    <input type="text" id="in-transcript" value="/Users/slowbro/.claude/projects/-Users-slowbro-workspaces-cog/sess.jsonl">
+
+    <h2>Git</h2>
+    <label>branch</label>
+    <input type="text" id="in-branch" value="main">
+    <div class="row" style="margin-top:4px">
+      <span><input type="checkbox" id="in-dirty"> <label for="in-dirty" style="display:inline">dirty</label></span>
+      <span><label style="display:inline">↑</label><input type="number" id="in-ahead" value="0" style="width:50px;display:inline-block"></span>
+      <span><label style="display:inline">↓</label><input type="number" id="in-behind" value="0" style="width:50px;display:inline-block"></span>
+    </div>
+
+    <h2>Context window</h2>
+    <label>used %: <span id="ctx-pct-display">22</span>%</label>
+    <input type="range" id="in-ctx-pct" min="0" max="100" value="22">
+    <label>window size (K tokens)</label>
+    <input type="number" id="in-ctx-size" value="1000">
+
+    <h2>Cost / burn</h2>
+    <div class="row">
+      <span><label>session $</label><input type="number" id="in-cost-session" value="0.31" step="0.01"></span>
+      <span><label>today $</label><input type="number" id="in-cost-today" value="2.40" step="0.01"></span>
+    </div>
+    <div class="row">
+      <span><label>5h used %</label><input type="number" id="in-block-used" value="12"></span>
+      <span><label>5h proj %</label><input type="number" id="in-block-proj" value="45"></span>
+    </div>
+    <div class="row">
+      <span><label>5h remaining (min)</label><input type="number" id="in-block-rem" value="135"></span>
+      <span><label>weekly %</label><input type="number" id="in-weekly" value="8"></span>
+    </div>
+    <div class="row">
+      <span><label>burn (K/min)</label><input type="number" id="in-burn" value="9.4" step="0.1"></span>
+      <span><label>cache TTL elapsed (s)</label><input type="number" id="in-cache-ttl" value="82"></span>
+    </div>
+  </div>
+
+  <!-- MIDDLE: layout + preview -->
+  <div class="panel">
+    <h2 style="margin-top:0">Live preview</h2>
+    <div class="terminal" id="preview"></div>
+
+    <h2>Layout</h2>
+    <div class="row">
+      <span><label>separator</label>
+        <select id="in-sep">
+          <option value=" · ">·  (space-dot-space)</option>
+          <option value=" | ">|  (pipe)</option>
+          <option value="  ">double-space</option>
+          <option value=" › ">›  (chevron)</option>
+          <option value=" → ">→  (arrow)</option>
+          <option value=" ❯ ">❯  (prompt)</option>
+          <option value="  ">powerline arrow (needs Nerd Font)</option>
+        </select>
+      </span>
+      <span><label>color</label><input type="checkbox" id="in-color" checked></span>
+    </div>
+    <div id="lines" class="lines"></div>
+    <div class="toolbar">
+      <button onclick="addLine()">+ Add line</button>
+      <button onclick="resetToCurrent()">Reset to your current</button>
+      <button onclick="copyShellScript()">Copy bash script</button>
+      <button onclick="copyRaw()">Copy raw output</button>
+    </div>
+
+    <h2>Widget palette</h2>
+    <div class="widget-list" id="widget-palette"></div>
+    <div class="small">Click a chip to append to the last line. Drag chips between lines or sideways to reorder. Click × to remove.</div>
+
+    <details style="margin-top:12px">
+      <summary>Generated bash script</summary>
+      <textarea id="raw-script" rows="10" readonly style="font-size:11px;margin-top:6px"></textarea>
+    </details>
+  </div>
+
+  <!-- RIGHT: preset library -->
+  <div class="panel">
+    <h2 style="margin-top:0">Preset library</h2>
+    <div class="small" style="margin-bottom:8px">Click any card to load. External links open the source project.</div>
+    <div id="preset-list"></div>
+  </div>
+</div>
+
+<script>
+// ---------- state ----------
+const state = {
+  session_id: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
+  model: 'Claude Sonnet 4.5',
+  project_dir: '/Users/slowbro/workspaces/cog',
+  transcript: '/Users/slowbro/.claude/projects/-Users-slowbro-workspaces-cog/sess.jsonl',
+  branch: 'main',
+  dirty: false,
+  ahead: 0,
+  behind: 0,
+  ctxPct: 22,
+  ctxSize: 1000,
+  costSession: 0.31,
+  costToday: 2.40,
+  blockUsed: 12,
+  blockProj: 45,
+  blockRem: 135,
+  weekly: 8,
+  burn: 9.4,
+  cacheTtl: 82,
+  sep: ' · ',
+  color: true,
+  lines: [
+    ['project_session', 'dir', 'branch_dirty', 'model'],
+    ['ctx_pct_label', 'block_combined', 'weekly_label'],
+  ],
+};
+
+// ---------- helpers ----------
+function deriveProject(s) {
+  const parts = s.transcript.split('/');
+  if (parts.length >= 2 && parts[parts.length - 2]) return parts[parts.length - 2];
+  return s.project_dir.replace(/^\//, '-').replace(/\//g, '-');
+}
+function tildify(p) { return p.replace(/^\/Users\/[^/]+/, '~'); }
+function shortModel(m) {
+  m = m.toLowerCase();
+  if (m.includes('opus')) return 'op';
+  if (m.includes('sonnet')) return 'so';
+  if (m.includes('haiku')) return 'ha';
+  return 'cl';
+}
+function modelEmoji(m) {
+  m = m.toLowerCase();
+  if (m.includes('opus')) return '🧠';
+  if (m.includes('sonnet')) return '👁';
+  if (m.includes('haiku')) return '🍃';
+  return '🤖';
+}
+function ctxColor(p) { return p < 50 ? 'fg-green' : p < 80 ? 'fg-yellow' : 'fg-red'; }
+function blockColor(p) { return p < 50 ? 'fg-green' : p < 80 ? 'fg-yellow' : 'fg-red'; }
+function burnColor(b) { return b < 5 ? 'fg-green' : b < 15 ? 'fg-yellow' : 'fg-red'; }
+function cacheColor(s) { return s < 180 ? 'fg-green' : s < 270 ? 'fg-yellow' : 'fg-red'; }
+function burnEmoji(b) { return b < 5 ? '🌱' : b < 15 ? '🔥' : '🚒'; }
+function bar(p, w, full, empty) {
+  const filled = Math.round(w * p / 100);
+  return full.repeat(filled) + empty.repeat(w - filled);
+}
+function minToHm(m) {
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `${h}h${String(mm).padStart(2,'0')}m`;
+}
+function secToMs(s) {
+  const m = Math.floor(s / 60), ss = s % 60;
+  return `${m}m${String(ss).padStart(2,'0')}s`;
+}
+function fakeSpark(b) {
+  const chars = '▁▂▃▄▅▆▇█';
+  const base = Math.min(7, Math.max(0, Math.round(b / 3)));
+  return Array.from({length: 8}, (_, i) => {
+    const wobble = ((i * 137 + Math.floor(b * 10)) % 5) - 2;
+    return chars[Math.min(7, Math.max(0, base + wobble))];
+  }).join('');
+}
+function moonPhase() {
+  return ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'][new Date().getDate() % 8];
+}
+
+// ---------- widgets ----------
+const WIDGETS = {
+  session:           { name: 'session [id8]',     fn: s => ({t: `[${s.session_id.slice(0,8)}]`, c: 'fg-muted'}) },
+  session_long:      { name: 'session [id12]',    fn: s => ({t: `[${s.session_id.slice(0,12)}]`, c: 'fg-muted'}) },
+  project:           { name: 'project name',       fn: s => ({t: deriveProject(s), c: 'fg-cyan'}) },
+  project_session:   { name: 'project/session',    fn: s => ({t: `${deriveProject(s)}/${s.session_id.slice(0,8)}`, c: 'fg-cyan'}) },
+  dir:               { name: 'cwd (~)',            fn: s => ({t: tildify(s.project_dir), c: 'fg-accent bold'}) },
+  model:             { name: 'model',              fn: s => ({t: s.model, c: 'fg-magenta'}) },
+  model_short:       { name: 'model [2-letter]',   fn: s => ({t: `[${shortModel(s.model)}]`, c: 'fg-magenta'}) },
+  model_emoji:       { name: 'model emoji',        fn: s => ({t: modelEmoji(s.model), c: ''}) },
+  branch:            { name: 'branch (main)',      fn: s => ({t: s.branch ? `(${s.branch})` : '', c: 'fg-yellow'}) },
+  branch_dirty:      { name: 'branch + dirty *',   fn: s => ({t: s.branch ? `(${s.branch}${s.dirty?'*':''})` : '', c: 'fg-yellow'}) },
+  branch_ahead_behind: { name: 'branch + ↑↓',      fn: s => {
+    if (!s.branch) return {t: '', c: ''};
+    let ex = '';
+    if (s.ahead) ex += `↑${s.ahead}`;
+    if (s.behind) ex += `↓${s.behind}`;
+    return {t: `(${s.branch}${s.dirty?'*':''}${ex?' '+ex:''})`, c: 'fg-yellow'};
+  } },
+  ctx_pct:           { name: 'ctx 22%',            fn: s => ({t: `${s.ctxPct}%`, c: ctxColor(s.ctxPct)}) },
+  ctx_pct_label:     { name: 'ctx 22% (labeled)',  fn: s => ({t: `ctx ${s.ctxPct}%`, c: ctxColor(s.ctxPct)}) },
+  ctx_raw:           { name: 'ctx 220K/1000K',     fn: s => {
+    const u = Math.round(s.ctxSize * s.ctxPct / 100);
+    return {t: `${u}K/${s.ctxSize}K`, c: ctxColor(s.ctxPct)};
+  } },
+  ctx_bar:           { name: 'ctx ████░░░░░░',     fn: s => ({t: bar(s.ctxPct, 10, '█', '░'), c: ctxColor(s.ctxPct)}) },
+  ctx_bar_dots:      { name: 'ctx •••∘∘∘∘∘∘∘',     fn: s => ({t: bar(s.ctxPct, 10, '●', '○'), c: ctxColor(s.ctxPct)}) },
+  ctx_full:          { name: 'ctx bar + raw + %',  fn: s => {
+    const u = Math.round(s.ctxSize * s.ctxPct / 100);
+    return {t: `${bar(s.ctxPct,10,'█','░')} ${s.ctxPct}% (${u}K/${s.ctxSize}K)`, c: ctxColor(s.ctxPct)};
+  } },
+  cost_session:      { name: 'cost $0.31',         fn: s => ({t: `$${s.costSession.toFixed(2)}`, c: 'fg-green'}) },
+  cost_today:        { name: 'today $2.40',        fn: s => ({t: `today $${s.costToday.toFixed(2)}`, c: 'fg-green'}) },
+  block_pct:         { name: '5h 12%',             fn: s => ({t: `5h ${s.blockUsed}%`, c: blockColor(s.blockUsed)}) },
+  block_proj:        { name: '5h 12%→45%',         fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}%`, c: blockColor(s.blockProj)}) },
+  block_combined:    { name: '5h 12%→45% 2h15m',   fn: s => ({t: `5h ${s.blockUsed}%→${s.blockProj}% ${minToHm(s.blockRem)}`, c: blockColor(s.blockProj)}) },
+  block_remaining:   { name: '2h15m left',         fn: s => ({t: `${minToHm(s.blockRem)} left`, c: 'fg-muted'}) },
+  weekly:            { name: 'wk 8%',              fn: s => ({t: `${s.weekly}%`, c: 'fg-muted'}) },
+  weekly_label:      { name: 'wk 8% (labeled)',    fn: s => ({t: `wk ${s.weekly}%`, c: 'fg-muted'}) },
+  burn_rate:         { name: 'burn 9.4K/min',      fn: s => ({t: `${s.burn}K/min`, c: burnColor(s.burn)}) },
+  burn_emoji:        { name: 'burn 🔥 9.4K/min',   fn: s => ({t: `${burnEmoji(s.burn)} ${s.burn}K/min`, c: burnColor(s.burn)}) },
+  sparkline:         { name: 'sparkline ▁▂▄▆█',    fn: s => ({t: fakeSpark(s.burn), c: burnColor(s.burn)}) },
+  cache_ttl:         { name: 'cache 1m22s',        fn: s => ({t: `cache ${secToMs(s.cacheTtl)}`, c: cacheColor(s.cacheTtl)}) },
+  worktree:          { name: 'wt:adoring-boyd',    fn: s => {
+    const m = s.project_dir.match(/worktrees\/([^/]+)/);
+    return m ? {t: `wt:${m[1]}`, c: 'fg-orange'} : {t: '', c: ''};
+  } },
+  time:              { name: 'time 16:52',         fn: () => {
+    const d = new Date();
+    return {t: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`, c: 'fg-muted'};
+  } },
+  moon:              { name: 'moon 🌒',            fn: () => ({t: moonPhase(), c: ''}) },
+  mcp_health:        { name: 'mcp 5/5',            fn: () => ({t: 'mcp 5/5', c: 'fg-green'}) },
+  thinking:          { name: 'effort: high',       fn: () => ({t: 'effort: high', c: 'fg-magenta'}) },
+  vim_mode:          { name: 'vim: NORMAL',        fn: () => ({t: '-- NORMAL --', c: 'fg-green'}) },
+};
+
+// ---------- rendering ----------
+function renderLine(keys) {
+  return keys
+    .map(k => WIDGETS[k] ? WIDGETS[k].fn(state) : null)
+    .filter(p => p && p.t);
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+function renderHtml() {
+  return state.lines.map(line => {
+    const parts = renderLine(line);
+    return parts.map(p => state.color
+      ? `<span class="${p.c}">${escapeHtml(p.t)}</span>`
+      : escapeHtml(p.t)).join(escapeHtml(state.sep));
+  }).join('\n');
+}
+function renderRaw() {
+  return state.lines.map(line =>
+    renderLine(line).map(p => p.t).join(state.sep)
+  ).join('\n');
+}
+
+// ---------- bash codegen ----------
+const BASH_EXPR = {
+  session:           '"[${session_id:0:8}]"',
+  session_long:      '"[${session_id:0:12}]"',
+  project:           '"$project_name"',
+  project_session:   '"${project_name}/${session_id:0:8}"',
+  dir:               '"$dir_disp"',
+  model:             '"$model"',
+  model_short:       '"[$model_short]"',
+  branch:            '"(${branch})"',
+  branch_dirty:      '"(${branch}${dirty})"',
+  ctx_pct_label:     '"ctx ${ctx_pct}%"',
+  ctx_pct:           '"${ctx_pct}%"',
+  cost_session:      '"\\$$session_cost"',
+  block_combined:    '"5h ${block_pct}%→${block_proj}% ${block_rem}"',
+  weekly_label:      '"wk ${weekly_pct}%"',
+  time:              '"$(date +%H:%M)"',
+};
+function generateBash() {
+  const sep = state.sep.replace(/'/g, `'\\''`);
+  const lineExprs = state.lines.map((line, i) => {
+    const parts = line.map(k => BASH_EXPR[k] ?? `"<${k}>"`);
+    const joined = parts.join(` '${sep}' `);
+    const suffix = i < state.lines.length - 1 ? '\\n' : '';
+    return `printf '%s${suffix}' ${joined}`;
+  }).join('\n');
+  return `#!/usr/bin/env bash
+# Generated by Statusline Lab.
+# Drop this in ~/.claude/statusline.sh and chmod +x.
+set -uo pipefail
+payload=$(cat)
+j() { jq -r "$1" <<<"$payload" 2>/dev/null; }
+
+session_id=$(j '.session_id // ""')
+model=$(j '.model.display_name // "?"')
+project_dir=$(j '.workspace.project_dir // .cwd // "?"')
+transcript=$(j '.transcript_path // ""')
+project_name=""
+[[ -n "$transcript" ]] && project_name=$(basename "$(dirname "$transcript")")
+dir_disp="\${project_dir/#$HOME/~}"
+
+# Git
+branch=""; dirty=""
+if git -C "$project_dir" rev-parse --git-dir >/dev/null 2>&1; then
+  branch=$(git -C "$project_dir" symbolic-ref --short HEAD 2>/dev/null \\
+        || git -C "$project_dir" rev-parse --short HEAD 2>/dev/null || true)
+  [[ -n $(git -C "$project_dir" status --porcelain 2>/dev/null) ]] && dirty="*"
+fi
+
+# Model short
+case "$model" in
+  *Opus*)   model_short="op" ;;
+  *Sonnet*) model_short="so" ;;
+  *Haiku*)  model_short="ha" ;;
+  *)        model_short="cl" ;;
+esac
+
+# Context — prefer harness value, fallback to transcript parse
+ctx_pct=$(j '.context_window.used_percentage // empty')
+[[ -z "$ctx_pct" ]] && ctx_pct=0
+ctx_pct=\${ctx_pct%.*}
+
+# These need ccusage; left as placeholders. Wire them in if you want
+# the burn / 5h / weekly numbers live (see ccusage.com/guide/statusline).
+session_cost="0.00"
+block_pct="0"; block_proj="0"; block_rem="0h00m"
+weekly_pct="0"
+
+${lineExprs}
+`;
+}
+
+// ---------- DOM ----------
+function refresh() {
+  document.getElementById('preview').innerHTML = renderHtml();
+  document.getElementById('raw-script').value = generateBash();
+  document.getElementById('ctx-pct-display').textContent = state.ctxPct;
+  renderLinesUI();
+  renderPresets();
+}
+function renderLinesUI() {
+  const wrap = document.getElementById('lines');
+  wrap.innerHTML = '';
+  state.lines.forEach((line, lineIdx) => {
+    const row = document.createElement('div');
+    row.className = 'line-row';
+    const lab = document.createElement('span');
+    lab.className = 'line-label'; lab.textContent = `L${lineIdx+1}`;
+    row.appendChild(lab);
+    const segs = document.createElement('div');
+    segs.className = 'seg-list';
+    segs.dataset.lineIdx = lineIdx;
+    line.forEach((key, segIdx) => {
+      const seg = document.createElement('span');
+      seg.className = 'seg';
+      seg.draggable = true;
+      seg.dataset.line = lineIdx;
+      seg.dataset.seg = segIdx;
+      const lbl = document.createElement('span');
+      lbl.textContent = WIDGETS[key]?.name ?? key;
+      seg.appendChild(lbl);
+      const x = document.createElement('span');
+      x.className = 'x'; x.textContent = '×';
+      x.onclick = e => {
+        e.stopPropagation();
+        state.lines[lineIdx].splice(segIdx, 1);
+        refresh();
+      };
+      seg.appendChild(x);
+      seg.addEventListener('dragstart', dragStart);
+      seg.addEventListener('dragend', dragEnd);
+      segs.appendChild(seg);
+    });
+    segs.addEventListener('dragover', e => e.preventDefault());
+    segs.addEventListener('drop', drop);
+    row.appendChild(segs);
+    if (state.lines.length > 1) {
+      const rm = document.createElement('button');
+      rm.textContent = '−'; rm.title = 'Remove line';
+      rm.style.flex = '0 0 auto';
+      rm.onclick = () => { state.lines.splice(lineIdx, 1); refresh(); };
+      row.appendChild(rm);
+    }
+    wrap.appendChild(row);
+  });
+}
+
+let dragSrc = null;
+function dragStart(e) {
+  dragSrc = e.target.closest('.seg');
+  if (dragSrc) dragSrc.classList.add('dragging');
+}
+function dragEnd(e) {
+  if (dragSrc) dragSrc.classList.remove('dragging');
+  dragSrc = null;
+}
+function drop(e) {
+  e.preventDefault();
+  if (!dragSrc) return;
+  const targetLine = +e.currentTarget.dataset.lineIdx;
+  const srcLine = +dragSrc.dataset.line;
+  const srcSeg = +dragSrc.dataset.seg;
+  const moved = state.lines[srcLine][srcSeg];
+  state.lines[srcLine].splice(srcSeg, 1);
+  const remaining = [...e.currentTarget.querySelectorAll('.seg')].filter(s => s !== dragSrc);
+  let insertAt = remaining.length;
+  for (let i = 0; i < remaining.length; i++) {
+    const r = remaining[i].getBoundingClientRect();
+    if (e.clientX < r.left + r.width / 2) { insertAt = i; break; }
+  }
+  // adjust for same-line removal shifting indices
+  if (srcLine === targetLine && srcSeg < insertAt) insertAt--;
+  insertAt = Math.max(0, Math.min(insertAt, state.lines[targetLine].length));
+  state.lines[targetLine].splice(insertAt, 0, moved);
+  refresh();
+}
+
+function addLine() { state.lines.push([]); refresh(); }
+function resetToCurrent() {
+  state.lines = [
+    ['project_session', 'dir', 'branch_dirty', 'model'],
+    ['ctx_pct_label', 'block_combined', 'weekly_label'],
+  ];
+  state.sep = ' · ';
+  document.getElementById('in-sep').value = ' · ';
+  refresh();
+}
+async function copyShellScript() {
+  await navigator.clipboard.writeText(generateBash());
+  flash('Copied bash script. Save as ~/.claude/statusline.sh; chmod +x.');
+}
+async function copyRaw() {
+  await navigator.clipboard.writeText(renderRaw());
+  flash('Copied rendered statusline (no color codes).');
+}
+function flash(msg) {
+  const f = document.createElement('div');
+  f.textContent = msg;
+  f.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#1f6feb;color:white;padding:8px 12px;border-radius:4px;font-size:12px;z-index:1000;';
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 2400);
+}
+
+// ---------- palette ----------
+function renderPalette() {
+  const wrap = document.getElementById('widget-palette');
+  wrap.innerHTML = '';
+  Object.entries(WIDGETS).forEach(([key, w]) => {
+    const c = document.createElement('span');
+    c.className = 'chip';
+    c.textContent = w.name;
+    c.onclick = () => {
+      const last = state.lines[state.lines.length - 1] ?? state.lines[0];
+      last.push(key);
+      refresh();
+    };
+    wrap.appendChild(c);
+  });
+}
+
+// ---------- presets ----------
+const PRESETS = [
+  {
+    name: 'Your current (slowbro)',
+    desc: 'project/session · cwd (branch) · model + ctx | 5h | wk',
+    source: 'Local — ~/.claude/statusline.sh',
+    url: null,
+    sep: ' · ',
+    lines: [
+      ['project_session', 'dir', 'branch_dirty', 'model'],
+      ['ctx_pct_label', 'block_combined', 'weekly_label'],
+    ],
+  },
+  {
+    name: 'davidamo9 minimal',
+    desc: 'Two-letter model, proportional bar, dirty flag.',
+    source: 'gist:davidamo9',
+    url: 'https://gist.github.com/davidamo9/764415aff29959de21f044dbbfd00cd9',
+    sep: ' | ',
+    lines: [['model_short', 'cost_session', 'ctx_full', 'branch_dirty']],
+  },
+  {
+    name: 'AI Hero — context-only',
+    desc: 'Strong opinion: only ctx % really matters.',
+    source: 'aihero.dev',
+    url: 'https://www.aihero.dev/creating-the-perfect-claude-code-status-line',
+    sep: '  ',
+    lines: [['ctx_bar', 'ctx_pct']],
+  },
+  {
+    name: 'ccusage — burn-rate specialist',
+    desc: 'Live burn rate w/ emoji, 5h block, ctx.',
+    source: 'ccusage.com',
+    url: 'https://ccusage.com/guide/statusline',
+    sep: ' | ',
+    lines: [['model_short', 'cost_session', 'block_combined', 'burn_emoji', 'ctx_pct_label']],
+  },
+  {
+    name: 'Owloops powerline',
+    desc: 'Vim-style segments; cache-TTL since last message.',
+    source: 'Owloops/claude-powerline',
+    url: 'https://github.com/Owloops/claude-powerline',
+    sep: ' ❯ ',
+    lines: [['dir', 'branch_dirty', 'model', 'ctx_bar_dots', 'cache_ttl']],
+  },
+  {
+    name: 'CCometixLine — icons',
+    desc: 'Rust + Nerd Font; emoji per model; ↑↓ ahead/behind.',
+    source: 'Haleclipse/CCometixLine',
+    url: 'https://github.com/Haleclipse/CCometixLine',
+    sep: ' › ',
+    lines: [['model_emoji', 'dir', 'branch_ahead_behind', 'ctx_pct_label', 'block_pct']],
+  },
+  {
+    name: 'rz1989s — multi-line maximalist',
+    desc: '4 lines; cost / moon / mcp health.',
+    source: 'rz1989s/claude-code-statusline',
+    url: 'https://github.com/rz1989s/claude-code-statusline',
+    sep: ' · ',
+    lines: [
+      ['project_session', 'dir', 'branch_dirty'],
+      ['model', 'ctx_full'],
+      ['cost_today', 'block_combined', 'weekly_label'],
+      ['time', 'moon', 'mcp_health'],
+    ],
+  },
+  {
+    name: 'ccstatusline — kitchen sink',
+    desc: 'Thinking effort + burn rate + sparkline.',
+    source: 'sirmalloc/ccstatusline',
+    url: 'https://github.com/sirmalloc/ccstatusline',
+    sep: ' | ',
+    lines: [
+      ['model', 'dir', 'branch_dirty', 'thinking'],
+      ['burn_rate', 'sparkline', 'ctx_pct_label', 'block_combined'],
+    ],
+  },
+  {
+    name: 'Dan Does Code — worktree-aware',
+    desc: 'Per-worktree session attribution.',
+    source: 'dandoescode.com',
+    url: 'https://www.dandoescode.com/blog/claude-code-custom-statusline',
+    sep: ' · ',
+    lines: [['model_short', 'worktree', 'dir', 'branch_dirty', 'ctx_pct_label']],
+  },
+  {
+    name: 'Substrate HUD (concept)',
+    desc: 'Survey-gap candidates: identity + MCP health + cache TTL.',
+    source: 'Lab original',
+    url: null,
+    sep: ' · ',
+    lines: [
+      ['project_session', 'dir', 'branch_dirty', 'model_emoji'],
+      ['mcp_health', 'cache_ttl', 'thinking', 'sparkline'],
+      ['ctx_full', 'block_combined', 'weekly_label'],
+    ],
+  },
+];
+function renderPresets() {
+  const wrap = document.getElementById('preset-list');
+  wrap.innerHTML = '';
+  PRESETS.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'preset-card';
+    card.onclick = (e) => {
+      if (e.target.tagName === 'A') return;
+      state.lines = p.lines.map(l => [...l]);
+      state.sep = p.sep;
+      document.getElementById('in-sep').value = p.sep;
+      refresh();
+    };
+    const sample = p.lines.map(line => {
+      return line.map(k => {
+        const w = WIDGETS[k];
+        if (!w) return k;
+        return w.fn(state).t;
+      }).filter(Boolean).join(p.sep);
+    }).join('\n');
+    card.innerHTML = `
+      <h3>${p.name}</h3>
+      <div class="desc">${p.desc}</div>
+      <div class="preview-mini">${escapeHtml(sample)}</div>
+      <div class="meta">${p.url ? `<a href="${p.url}" target="_blank" rel="noopener">${p.source} ↗</a>` : p.source}</div>
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+// ---------- bindings ----------
+function bind(id, key, parse) {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    let v = el.type === 'checkbox' ? el.checked : el.value;
+    if (parse) v = parse(v);
+    state[key] = v;
+    refresh();
+  });
+}
+bind('in-session-id', 'session_id');
+bind('in-model', 'model');
+bind('in-project-dir', 'project_dir');
+bind('in-transcript', 'transcript');
+bind('in-branch', 'branch');
+bind('in-dirty', 'dirty');
+bind('in-ahead', 'ahead', v => +v || 0);
+bind('in-behind', 'behind', v => +v || 0);
+bind('in-ctx-pct', 'ctxPct', v => +v);
+bind('in-ctx-size', 'ctxSize', v => +v);
+bind('in-cost-session', 'costSession', v => +v);
+bind('in-cost-today', 'costToday', v => +v);
+bind('in-block-used', 'blockUsed', v => +v);
+bind('in-block-proj', 'blockProj', v => +v);
+bind('in-block-rem', 'blockRem', v => +v);
+bind('in-weekly', 'weekly', v => +v);
+bind('in-burn', 'burn', v => +v);
+bind('in-cache-ttl', 'cacheTtl', v => +v);
+document.getElementById('in-sep').addEventListener('change', e => {
+  state.sep = e.target.value; refresh();
+});
+document.getElementById('in-color').addEventListener('change', e => {
+  state.color = e.target.checked; refresh();
+});
+
+// ---------- init ----------
+renderPalette();
+refresh();
+</script>
+</body>
+</html>
