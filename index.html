@@ -64,9 +64,12 @@
     display: inline-flex; align-items: center; gap: 4px;
     background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
     padding: 2px 8px; font-size: 11px; font-family: var(--mono);
-    cursor: pointer; user-select: none;
+    cursor: grab; user-select: none;
   }
+  .chip:active { cursor: grabbing; }
   .chip:hover { border-color: var(--accent); }
+  .chip.dragging { opacity: 0.3; }
+  .seg-list.drop-active { border-color: var(--accent); background: rgba(88,166,255,0.08); }
   .lines { display: flex; flex-direction: column; gap: 6px; }
   .line-row { display: flex; gap: 8px; align-items: center; }
   .line-label { font: 11px var(--mono); color: var(--muted); width: 24px; }
@@ -181,7 +184,7 @@
 
     <h2>Widget palette</h2>
     <div class="widget-list" id="widget-palette"></div>
-    <div class="small">Click a chip to append to the last line. Drag chips between lines or sideways to reorder. Click × to remove.</div>
+    <div class="small">Click a palette chip to append to the last line, or drag it onto any line. Drag layout chips between lines or sideways to reorder. Click × to remove.</div>
 
     <details style="margin-top:12px">
       <summary>Generated bash script</summary>
@@ -469,7 +472,10 @@ function renderLinesUI() {
       seg.addEventListener('dragend', dragEnd);
       segs.appendChild(seg);
     });
-    segs.addEventListener('dragover', e => e.preventDefault());
+    segs.addEventListener('dragover', e => { e.preventDefault(); segs.classList.add('drop-active'); });
+    segs.addEventListener('dragleave', e => {
+      if (!segs.contains(e.relatedTarget)) segs.classList.remove('drop-active');
+    });
     segs.addEventListener('drop', drop);
     row.appendChild(segs);
     if (state.lines.length > 1) {
@@ -485,31 +491,53 @@ function renderLinesUI() {
 
 let dragSrc = null;
 function dragStart(e) {
-  dragSrc = e.target.closest('.seg');
-  if (dragSrc) dragSrc.classList.add('dragging');
+  dragSrc = e.target.closest('.seg, .chip');
+  if (dragSrc) {
+    dragSrc.classList.add('dragging');
+    // Firefox requires setData to initiate a drag
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = dragSrc.dataset.source === 'palette' ? 'copy' : 'move';
+      try { e.dataTransfer.setData('text/plain', dragSrc.dataset.key || ''); } catch {}
+    }
+  }
 }
 function dragEnd(e) {
   if (dragSrc) dragSrc.classList.remove('dragging');
+  document.querySelectorAll('.seg-list.drop-active')
+    .forEach(el => el.classList.remove('drop-active'));
   dragSrc = null;
 }
-function drop(e) {
-  e.preventDefault();
-  if (!dragSrc) return;
-  const targetLine = +e.currentTarget.dataset.lineIdx;
-  const srcLine = +dragSrc.dataset.line;
-  const srcSeg = +dragSrc.dataset.seg;
-  const moved = state.lines[srcLine][srcSeg];
-  state.lines[srcLine].splice(srcSeg, 1);
-  const remaining = [...e.currentTarget.querySelectorAll('.seg')].filter(s => s !== dragSrc);
+function computeInsertIdx(targetEl, clientX) {
+  const remaining = [...targetEl.querySelectorAll('.seg')].filter(s => s !== dragSrc);
   let insertAt = remaining.length;
   for (let i = 0; i < remaining.length; i++) {
     const r = remaining[i].getBoundingClientRect();
-    if (e.clientX < r.left + r.width / 2) { insertAt = i; break; }
+    if (clientX < r.left + r.width / 2) { insertAt = i; break; }
   }
-  // adjust for same-line removal shifting indices
-  if (srcLine === targetLine && srcSeg < insertAt) insertAt--;
-  insertAt = Math.max(0, Math.min(insertAt, state.lines[targetLine].length));
-  state.lines[targetLine].splice(insertAt, 0, moved);
+  return insertAt;
+}
+function drop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drop-active');
+  if (!dragSrc) return;
+  const targetLine = +e.currentTarget.dataset.lineIdx;
+  const insertAt = computeInsertIdx(e.currentTarget, e.clientX);
+
+  if (dragSrc.dataset.source === 'palette') {
+    // New widget from palette — insert without removing anything.
+    const key = dragSrc.dataset.key;
+    state.lines[targetLine].splice(insertAt, 0, key);
+  } else {
+    // Existing seg being reordered or moved between lines.
+    const srcLine = +dragSrc.dataset.line;
+    const srcSeg = +dragSrc.dataset.seg;
+    const moved = state.lines[srcLine][srcSeg];
+    state.lines[srcLine].splice(srcSeg, 1);
+    let adjusted = insertAt;
+    if (srcLine === targetLine && srcSeg < insertAt) adjusted--;
+    adjusted = Math.max(0, Math.min(adjusted, state.lines[targetLine].length));
+    state.lines[targetLine].splice(adjusted, 0, moved);
+  }
   refresh();
 }
 
@@ -547,11 +575,17 @@ function renderPalette() {
     const c = document.createElement('span');
     c.className = 'chip';
     c.textContent = w.name;
+    c.draggable = true;
+    c.dataset.source = 'palette';
+    c.dataset.key = key;
+    c.title = 'Click to append, or drag onto a line';
     c.onclick = () => {
       const last = state.lines[state.lines.length - 1] ?? state.lines[0];
       last.push(key);
       refresh();
     };
+    c.addEventListener('dragstart', dragStart);
+    c.addEventListener('dragend', dragEnd);
     wrap.appendChild(c);
   });
 }
