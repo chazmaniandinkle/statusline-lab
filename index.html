@@ -112,15 +112,33 @@
 <div class="grid">
   <!-- LEFT: simulated session JSON -->
   <div class="panel">
-    <h2 style="margin-top:0">Simulated session</h2>
+    <h2 style="margin-top:0">Session</h2>
     <label>session_id</label>
     <input type="text" id="in-session-id" value="a1b2c3d4-e5f6-7890-abcd-ef0123456789">
+    <label>session_name <span class="small">(optional, via /rename)</span></label>
+    <input type="text" id="in-session-name" value="">
     <label>model.display_name</label>
     <input type="text" id="in-model" value="Claude Sonnet 4.5">
+    <label>version <span class="small">(Claude Code version)</span></label>
+    <input type="text" id="in-version" value="2.1.145">
+    <label>output_style.name</label>
+    <input type="text" id="in-output-style" value="default">
+
+    <h2>Workspace</h2>
     <label>workspace.project_dir</label>
     <input type="text" id="in-project-dir" value="/Users/you/projects/example">
-    <label>transcript_path <span class="small">(project name comes from this)</span></label>
+    <label>transcript_path <span class="small">(project derived from parent dir)</span></label>
     <input type="text" id="in-transcript" value="/Users/you/.claude/projects/-Users-you-projects-example/sess.jsonl">
+    <label>workspace.git_worktree <span class="small">(optional)</span></label>
+    <input type="text" id="in-ws-worktree" value="">
+    <div class="row">
+      <span><label>repo.host</label><input type="text" id="in-repo-host" value=""></span>
+      <span><label>repo.owner</label><input type="text" id="in-repo-owner" value=""></span>
+    </div>
+    <label>repo.name</label>
+    <input type="text" id="in-repo-name" value="">
+    <label>workspace.added_dirs count</label>
+    <input type="number" id="in-added-dirs" value="0">
 
     <h2>Git</h2>
     <label>branch</label>
@@ -132,12 +150,20 @@
     </div>
 
     <h2>Context window</h2>
-    <label>used %: <span id="ctx-pct-display">22</span>%</label>
+    <label>used_percentage: <span id="ctx-pct-display">22</span>%</label>
     <input type="range" id="in-ctx-pct" min="0" max="100" value="22">
-    <label>window size (K tokens)</label>
+    <label>context_window_size (K tokens)</label>
     <input type="number" id="in-ctx-size" value="1000">
+    <div class="row">
+      <span><label>total_input_tokens (K)</label><input type="number" id="in-input-tokens" value="220"></span>
+      <span><label>total_output_tokens</label><input type="number" id="in-output-tokens" value="1200"></span>
+    </div>
+    <div class="row">
+      <span><label>cache_read (K)</label><input type="number" id="in-cache-read" value="180"></span>
+      <span><label>cache_write (K)</label><input type="number" id="in-cache-write" value="40"></span>
+    </div>
 
-    <h2>Plan limits <span class="small">(rate_limits.* — matches Claude.ai panel)</span></h2>
+    <h2>Plan limits <span class="small">(rate_limits.*)</span></h2>
     <div class="row">
       <span><label>5h plan %</label><input type="number" id="in-plan-5h" value="4"></span>
       <span><label>5h resets (min)</label><input type="number" id="in-block-rem" value="241"></span>
@@ -147,22 +173,86 @@
       <span><label>weekly resets (days)</label><input type="number" id="in-week-rem-d" value="4"></span>
     </div>
 
-    <h2>ccusage (peak-relative, fallback)</h2>
+    <h2>Agent state</h2>
     <div class="row">
-      <span><label>session $</label><input type="number" id="in-cost-session" value="0.31" step="0.01"></span>
-      <span><label>today $</label><input type="number" id="in-cost-today" value="2.40" step="0.01"></span>
+      <span><label>effort.level</label>
+        <select id="in-effort">
+          <option value="">(unset)</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+          <option value="xhigh">xhigh</option>
+          <option value="max">max</option>
+        </select>
+      </span>
+      <span><label>thinking.enabled</label>
+        <select id="in-thinking-enabled">
+          <option value="false">false</option>
+          <option value="true">true</option>
+        </select>
+      </span>
     </div>
-    <div class="row">
-      <span><label>5h peak %</label><input type="number" id="in-block-used" value="12"></span>
-      <span><label>5h proj %</label><input type="number" id="in-block-proj" value="45"></span>
-    </div>
-    <div class="row">
-      <span><label>weekly peak %</label><input type="number" id="in-weekly" value="23"></span>
-      <span><label>burn (K/min)</label><input type="number" id="in-burn" value="9.4" step="0.1"></span>
-    </div>
-    <div class="row">
-      <span><label>cache TTL elapsed (s)</label><input type="number" id="in-cache-ttl" value="82"></span>
-    </div>
+    <label>vim.mode</label>
+    <select id="in-vim-mode">
+      <option value="">(disabled)</option>
+      <option value="NORMAL">NORMAL</option>
+      <option value="INSERT">INSERT</option>
+      <option value="VISUAL">VISUAL</option>
+      <option value="VISUAL LINE">VISUAL LINE</option>
+    </select>
+
+    <details>
+      <summary>Worktree (--worktree session)</summary>
+      <label>worktree.name</label>
+      <input type="text" id="in-wt-name" value="">
+      <label>worktree.branch</label>
+      <input type="text" id="in-wt-branch" value="">
+      <label>worktree.original_branch</label>
+      <input type="text" id="in-wt-original-branch" value="">
+    </details>
+
+    <details>
+      <summary>PR badge</summary>
+      <div class="row">
+        <span><label>pr.number</label><input type="number" id="in-pr-number" value=""></span>
+        <span><label>pr.review_state</label>
+          <select id="in-pr-state">
+            <option value="">(none)</option>
+            <option value="approved">approved</option>
+            <option value="pending">pending</option>
+            <option value="changes_requested">changes_requested</option>
+            <option value="draft">draft</option>
+          </select>
+        </span>
+      </div>
+    </details>
+
+    <details>
+      <summary>--agent flag</summary>
+      <label>agent.name</label>
+      <input type="text" id="in-agent-name" value="">
+      <label>agent.type</label>
+      <input type="text" id="in-agent-type" value="">
+    </details>
+
+    <details>
+      <summary>ccusage (peak-relative, fallback)</summary>
+      <div class="row">
+        <span><label>session $</label><input type="number" id="in-cost-session" value="0.31" step="0.01"></span>
+        <span><label>today $</label><input type="number" id="in-cost-today" value="2.40" step="0.01"></span>
+      </div>
+      <div class="row">
+        <span><label>5h peak %</label><input type="number" id="in-block-used" value="12"></span>
+        <span><label>5h proj %</label><input type="number" id="in-block-proj" value="45"></span>
+      </div>
+      <div class="row">
+        <span><label>weekly peak %</label><input type="number" id="in-weekly" value="23"></span>
+        <span><label>burn (K/min)</label><input type="number" id="in-burn" value="9.4" step="0.1"></span>
+      </div>
+      <div class="row">
+        <span><label>cache TTL elapsed (s)</label><input type="number" id="in-cache-ttl" value="82"></span>
+      </div>
+    </details>
   </div>
 
   <!-- MIDDLE: layout + preview -->
@@ -214,27 +304,42 @@
 <script>
 // ---------- state ----------
 const state = {
+  // .session_id, .session_name, .transcript_path, .cwd
   session_id: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
-  model: 'Claude Sonnet 4.5',
-  project_dir: '/Users/you/projects/example',
+  session_name: '',
   transcript: '/Users/you/.claude/projects/-Users-you-projects-example/sess.jsonl',
-  branch: 'main',
-  dirty: false,
-  ahead: 0,
-  behind: 0,
-  ctxPct: 22,
-  ctxSize: 1000,
-  plan5h: 4,         // .rate_limits.five_hour.used_percentage (plan-relative)
-  planWeek: 27,      // .rate_limits.seven_day.used_percentage (plan-relative)
-  weekRemD: 4,       // days until weekly reset
-  costSession: 0.31,
-  costToday: 2.40,
-  blockUsed: 12,     // ccusage peak-relative — used as fallback
-  blockProj: 45,
-  blockRem: 241,     // minutes until 5h reset
-  weekly: 23,        // ccusage peak-relative weekly
-  burn: 9.4,
-  cacheTtl: 82,
+  // .model.{id, display_name}
+  model: 'Claude Sonnet 4.5',
+  // .version, .output_style.name
+  version: '2.1.145',
+  outputStyle: 'default',
+  // .workspace.*
+  project_dir: '/Users/you/projects/example',
+  wsWorktree: '',
+  repoHost: '', repoOwner: '', repoName: '',
+  addedDirs: 0,
+  // git (derived, not on stdin schema directly but needed for the widgets)
+  branch: 'main', dirty: false, ahead: 0, behind: 0,
+  // .context_window.*
+  ctxPct: 22, ctxSize: 1000,
+  inputTokens: 220, outputTokens: 1200,
+  cacheRead: 180, cacheWrite: 40,
+  // .rate_limits.* (plan-relative)
+  plan5h: 4, planWeek: 27,
+  blockRem: 241,    // minutes until 5h reset (derived from resets_at)
+  weekRemD: 4,      // days until weekly reset
+  // .effort.level, .thinking.enabled, .vim.mode
+  effort: '', thinkingEnabled: false, vimMode: '',
+  // .worktree.* (--worktree session)
+  wtName: '', wtBranch: '', wtOriginalBranch: '',
+  // .pr.*
+  prNumber: '', prState: '',
+  // .agent.* (--agent flag)
+  agentName: '', agentType: '',
+  // ccusage peak-relative fallback
+  costSession: 0.31, costToday: 2.40,
+  blockUsed: 12, blockProj: 45, weekly: 23,
+  burn: 9.4, cacheTtl: 82,
   sep: ' · ',
   color: true,
   lines: [
@@ -342,18 +447,55 @@ const WIDGETS = {
   burn_emoji:        { name: 'burn 🔥 9.4K/min',   fn: s => ({t: `${burnEmoji(s.burn)} ${s.burn}K/min`, c: burnColor(s.burn)}) },
   sparkline:         { name: 'sparkline ▁▂▄▆█',    fn: s => ({t: fakeSpark(s.burn), c: burnColor(s.burn)}) },
   cache_ttl:         { name: 'cache 1m22s',        fn: s => ({t: `cache ${secToMs(s.cacheTtl)}`, c: cacheColor(s.cacheTtl)}) },
-  worktree:          { name: 'wt:adoring-boyd',    fn: s => {
-    const m = s.project_dir.match(/worktrees\/([^/]+)/);
-    return m ? {t: `wt:${m[1]}`, c: 'fg-orange'} : {t: '', c: ''};
-  } },
+  // worktree from .worktree.* (only present in --worktree session)
+  worktree:          { name: 'wt:name',            fn: s => s.wtName ? {t: `wt:${s.wtName}`, c: 'fg-orange'} : {t: '', c: ''} },
+  worktree_branch:   { name: 'wt branch',          fn: s => s.wtBranch ? {t: `wt:${s.wtName||'?'}@${s.wtBranch}`, c: 'fg-orange'} : {t: '', c: ''} },
+  worktree_orig_branch: { name: 'wt ← origBr',     fn: s => s.wtOriginalBranch ? {t: `← ${s.wtOriginalBranch}`, c: 'fg-muted'} : {t: '', c: ''} },
+  ws_git_worktree:   { name: 'workspace.git_worktree', fn: s => s.wsWorktree ? {t: `[${s.wsWorktree}]`, c: 'fg-orange'} : {t: '', c: ''} },
+  // Misc / time
   time:              { name: 'time 16:52',         fn: () => {
     const d = new Date();
     return {t: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`, c: 'fg-muted'};
   } },
   moon:              { name: 'moon 🌒',            fn: () => ({t: moonPhase(), c: ''}) },
   mcp_health:        { name: 'mcp 5/5',            fn: () => ({t: 'mcp 5/5', c: 'fg-green'}) },
-  thinking:          { name: 'effort: high',       fn: () => ({t: 'effort: high', c: 'fg-magenta'}) },
-  vim_mode:          { name: 'vim: NORMAL',        fn: () => ({t: '-- NORMAL --', c: 'fg-green'}) },
+  // New: identity + harness fields
+  session_name:      { name: 'session_name',       fn: s => s.session_name ? {t: s.session_name, c: 'fg-cyan'} : {t: '', c: ''} },
+  cc_version:        { name: 'cc 2.1.145',         fn: s => ({t: `cc ${s.version}`, c: 'fg-muted'}) },
+  output_style:      { name: 'style: default',     fn: s => ({t: `style:${s.outputStyle}`, c: 'fg-muted'}) },
+  repo:              { name: 'owner/repo',         fn: s => (s.repoOwner && s.repoName) ? {t: `${s.repoOwner}/${s.repoName}`, c: 'fg-cyan'} : {t: '', c: ''} },
+  repo_host:         { name: 'repo host',          fn: s => s.repoHost ? {t: s.repoHost, c: 'fg-muted'} : {t: '', c: ''} },
+  added_dirs:        { name: '+N dirs',            fn: s => s.addedDirs > 0 ? {t: `+${s.addedDirs} dirs`, c: 'fg-muted'} : {t: '', c: ''} },
+  // Context token detail
+  ctx_input_tokens:  { name: 'in 220K',            fn: s => ({t: `in ${s.inputTokens}K`, c: 'fg-muted'}) },
+  ctx_output_tokens: { name: 'out 1200',           fn: s => ({t: `out ${s.outputTokens}`, c: 'fg-muted'}) },
+  cache_hit_ratio:   { name: 'cache 82%',          fn: s => {
+    const t = s.cacheRead + s.cacheWrite;
+    return t > 0 ? {t: `cache ${Math.round(s.cacheRead * 100 / t)}%`, c: 'fg-green'} : {t: '', c: ''};
+  } },
+  // Agent state — now wired to real fields
+  effort_level:      { name: 'effort:high',        fn: s => {
+    if (!s.effort) return {t: '', c: ''};
+    const cls = {low:'fg-muted', medium:'fg-yellow', high:'fg-orange', xhigh:'fg-orange', max:'fg-red'}[s.effort] || '';
+    return {t: `effort:${s.effort}`, c: cls};
+  } },
+  thinking_enabled:  { name: '🧠 (when on)',       fn: s => s.thinkingEnabled ? {t: '🧠', c: 'fg-magenta'} : {t: '', c: ''} },
+  vim_mode:          { name: '-- NORMAL --',       fn: s => {
+    if (!s.vimMode) return {t: '', c: ''};
+    const cls = {NORMAL:'fg-green', INSERT:'fg-cyan', VISUAL:'fg-magenta', 'VISUAL LINE':'fg-magenta'}[s.vimMode] || '';
+    return {t: `-- ${s.vimMode} --`, c: cls};
+  } },
+  // --agent flag
+  agent_name:        { name: 'agent:name',         fn: s => s.agentName ? {t: `agent:${s.agentName}`, c: 'fg-magenta'} : {t: '', c: ''} },
+  agent_type:        { name: 'agent type',         fn: s => s.agentType ? {t: `<${s.agentType}>`, c: 'fg-magenta'} : {t: '', c: ''} },
+  // PR badge
+  pr_number:         { name: 'PR #123',            fn: s => s.prNumber ? {t: `PR #${s.prNumber}`, c: 'fg-cyan'} : {t: '', c: ''} },
+  pr_state:          { name: 'PR + state',         fn: s => {
+    if (!s.prNumber) return {t: '', c: ''};
+    const cls = {approved:'fg-green', pending:'fg-yellow', changes_requested:'fg-red', draft:'fg-muted'}[s.prState] || 'fg-cyan';
+    const glyph = {approved:'✓', pending:'…', changes_requested:'✗', draft:'◌'}[s.prState] || '';
+    return {t: `PR #${s.prNumber}${glyph ? ' '+glyph : ''}`, c: cls};
+  } },
 };
 
 // ---------- rendering ----------
@@ -383,15 +525,24 @@ function renderRaw() {
 const BASH_EXPR = {
   session:           '"[${session_id:0:8}]"',
   session_long:      '"[${session_id:0:12}]"',
+  session_name:      '"$session_name"',
   project:           '"$project_name"',
   project_session:   '"${project_name}/${session_id:0:8}"',
   dir:               '"$dir_disp"',
   model:             '"$model"',
   model_short:       '"[$model_short]"',
+  cc_version:        '"cc $cc_version"',
+  output_style:      '"style:$output_style"',
+  repo:              '"${repo_owner}/${repo_name}"',
+  repo_host:         '"$repo_host"',
+  added_dirs:        '"+${added_dirs} dirs"',
   branch:            '"(${branch})"',
   branch_dirty:      '"(${branch}${dirty})"',
   ctx_pct_label:     '"ctx ${ctx_pct}%"',
   ctx_pct:           '"${ctx_pct}%"',
+  ctx_input_tokens:  '"in ${input_tokens_k}K"',
+  ctx_output_tokens: '"out $output_tokens"',
+  cache_hit_ratio:   '"cache ${cache_hit_pct}%"',
   cost_session:      '"\\$$session_cost"',
   plan_5h:           '"5h ${plan_5h}%"',
   plan_5h_reset:     '"5h ${plan_5h}% ${block_rem}"',
@@ -399,6 +550,17 @@ const BASH_EXPR = {
   plan_week_reset:   '"wk ${plan_week}% ${week_rem_d}d"',
   block_combined:    '"5h ${block_pct}%→${block_proj}% ${block_rem}"',
   weekly_label:      '"wk ${weekly_pct}%"',
+  effort_level:      '"effort:$effort"',
+  thinking_enabled:  '"$thinking_glyph"',
+  vim_mode:          '"-- $vim_mode --"',
+  agent_name:        '"agent:$agent_name"',
+  agent_type:        '"<$agent_type>"',
+  pr_number:         '"PR #$pr_number"',
+  pr_state:          '"PR #$pr_number $pr_glyph"',
+  worktree:          '"wt:$wt_name"',
+  worktree_branch:   '"wt:${wt_name}@${wt_branch}"',
+  worktree_orig_branch: '"← $wt_original_branch"',
+  ws_git_worktree:   '"[$ws_git_worktree]"',
   time:              '"$(date +%H:%M)"',
 };
 function generateBash() {
@@ -412,27 +574,21 @@ function generateBash() {
   return `#!/usr/bin/env bash
 # Generated by Statusline Lab.
 # Drop this in ~/.claude/statusline.sh and chmod +x.
+# Schema reference: every field below is documented in the binary's help text
+# at \`claude\` > /statusline (or strings extraction from the CLI binary).
 set -uo pipefail
 payload=$(cat)
 j() { jq -r "$1" <<<"$payload" 2>/dev/null; }
 
+# --- Session ---------------------------------------------------------------
 session_id=$(j '.session_id // ""')
-model=$(j '.model.display_name // "?"')
-project_dir=$(j '.workspace.project_dir // .cwd // "?"')
+session_name=$(j '.session_name // ""')
 transcript=$(j '.transcript_path // ""')
-project_name=""
-[[ -n "$transcript" ]] && project_name=$(basename "$(dirname "$transcript")")
-dir_disp="\${project_dir/#$HOME/~}"
+cc_version=$(j '.version // ""')
 
-# Git
-branch=""; dirty=""
-if git -C "$project_dir" rev-parse --git-dir >/dev/null 2>&1; then
-  branch=$(git -C "$project_dir" symbolic-ref --short HEAD 2>/dev/null \\
-        || git -C "$project_dir" rev-parse --short HEAD 2>/dev/null || true)
-  [[ -n $(git -C "$project_dir" status --porcelain 2>/dev/null) ]] && dirty="*"
-fi
-
-# Model short
+# --- Model -----------------------------------------------------------------
+model=$(j '.model.display_name // "?"')
+model_id=$(j '.model.id // ""')
 case "$model" in
   *Opus*)   model_short="op" ;;
   *Sonnet*) model_short="so" ;;
@@ -440,44 +596,95 @@ case "$model" in
   *)        model_short="cl" ;;
 esac
 
-# Context — prefer harness value, fallback to transcript parse
+# --- Workspace -------------------------------------------------------------
+cwd=$(j '.cwd // ""')
+project_dir=$(j '.workspace.project_dir // .cwd // "?"')
+current_dir=$(j '.workspace.current_dir // .cwd // ""')
+ws_git_worktree=$(j '.workspace.git_worktree // ""')
+repo_host=$(j '.workspace.repo.host // ""')
+repo_owner=$(j '.workspace.repo.owner // ""')
+repo_name=$(j '.workspace.repo.name // ""')
+added_dirs=$(j '.workspace.added_dirs | length // 0')
+project_name=""
+[[ -n "$transcript" ]] && project_name=$(basename "$(dirname "$transcript")")
+dir_disp="\${project_dir/#$HOME/~}"
+
+# --- Output style ----------------------------------------------------------
+output_style=$(j '.output_style.name // ""')
+
+# --- Git -------------------------------------------------------------------
+branch=""; dirty=""
+if git -C "$project_dir" rev-parse --git-dir >/dev/null 2>&1; then
+  branch=$(git -C "$project_dir" symbolic-ref --short HEAD 2>/dev/null \\
+        || git -C "$project_dir" rev-parse --short HEAD 2>/dev/null || true)
+  [[ -n $(git -C "$project_dir" status --porcelain 2>/dev/null) ]] && dirty="*"
+fi
+
+# --- Context window --------------------------------------------------------
 ctx_pct=$(j '.context_window.used_percentage // empty')
 [[ -z "$ctx_pct" ]] && ctx_pct=0
 ctx_pct=\${ctx_pct%.*}
+total_input_tokens=$(j '.context_window.total_input_tokens // 0')
+output_tokens=$(j '.context_window.total_output_tokens // 0')
+input_tokens_k=$(( total_input_tokens / 1000 ))
+cache_read=$(j '.context_window.current_usage.cache_read_input_tokens // 0')
+cache_write=$(j '.context_window.current_usage.cache_creation_input_tokens // 0')
+cache_total=$(( cache_read + cache_write ))
+cache_hit_pct=0
+[[ "$cache_total" -gt 0 ]] && cache_hit_pct=$(( cache_read * 100 / cache_total ))
 
-# Plan-relative limits — Claude Code 2.1.80+ exposes these in stdin JSON.
-# These match the Claude.ai usage panel exactly. They may be absent
-# (older harness, or before the first API response of the session).
+# --- Rate limits (plan-relative; matches Claude.ai usage panel exactly) ---
+# Available in Claude Code 2.1.80+. May be absent for non-subscribers or
+# before the first API response of the session. resets_at is unix epoch.
 plan_5h=$(j '.rate_limits.five_hour.used_percentage // empty')
 plan_5h=\${plan_5h%.*}; [[ -z "$plan_5h" ]] && plan_5h="?"
 plan_week=$(j '.rate_limits.seven_day.used_percentage // empty')
 plan_week=\${plan_week%.*}; [[ -z "$plan_week" ]] && plan_week="?"
-
-# 5h reset countdown from resets_at timestamp.
 block_rem="?"
 resets_at=$(j '.rate_limits.five_hour.resets_at // empty')
-if [[ -n "$resets_at" ]]; then
-  reset_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S' "\${resets_at%%.*}" '+%s' 2>/dev/null \\
-            || date -d "$resets_at" '+%s' 2>/dev/null || echo 0)
-  if [[ "$reset_epoch" -gt 0 ]]; then
-    rem_min=$(( (reset_epoch - $(date +%s)) / 60 ))
-    [[ "$rem_min" -gt 0 ]] && block_rem="$((rem_min/60))h$((rem_min%60))m"
-  fi
+resets_at=\${resets_at%.*}
+if [[ -n "$resets_at" && "$resets_at" =~ ^[0-9]+$ ]]; then
+  rem_min=$(( (resets_at - $(date +%s)) / 60 ))
+  [[ "$rem_min" -gt 0 ]] && block_rem="$((rem_min/60))h$((rem_min%60))m"
 fi
-
-# Days until weekly reset.
 week_rem_d="?"
 week_resets_at=$(j '.rate_limits.seven_day.resets_at // empty')
-if [[ -n "$week_resets_at" ]]; then
-  week_reset_epoch=$(date -j -f '%Y-%m-%dT%H:%M:%S' "\${week_resets_at%%.*}" '+%s' 2>/dev/null \\
-                 || date -d "$week_resets_at" '+%s' 2>/dev/null || echo 0)
-  if [[ "$week_reset_epoch" -gt 0 ]]; then
-    week_rem_d=$(( (week_reset_epoch - $(date +%s)) / 86400 ))
-  fi
+week_resets_at=\${week_resets_at%.*}
+if [[ -n "$week_resets_at" && "$week_resets_at" =~ ^[0-9]+$ ]]; then
+  week_rem_d=$(( (week_resets_at - $(date +%s)) / 86400 ))
 fi
 
-# Cost / ccusage-derived peak-relative metrics — wire ccusage calls here if
-# you need them (see ccusage.com/guide/statusline). Left as placeholders.
+# --- Agent state -----------------------------------------------------------
+effort=$(j '.effort.level // ""')
+thinking_enabled=$(j '.thinking.enabled // false')
+thinking_glyph=""
+[[ "$thinking_enabled" == "true" ]] && thinking_glyph="🧠"
+vim_mode=$(j '.vim.mode // ""')
+
+# --- --agent flag ----------------------------------------------------------
+agent_name=$(j '.agent.name // ""')
+agent_type=$(j '.agent.type // ""')
+
+# --- PR badge --------------------------------------------------------------
+pr_number=$(j '.pr.number // empty')
+pr_url=$(j '.pr.url // ""')
+pr_review_state=$(j '.pr.review_state // ""')
+case "$pr_review_state" in
+  approved)          pr_glyph="✓" ;;
+  pending)           pr_glyph="…" ;;
+  changes_requested) pr_glyph="✗" ;;
+  draft)             pr_glyph="◌" ;;
+  *)                 pr_glyph="" ;;
+esac
+
+# --- Worktree (--worktree session) ----------------------------------------
+wt_name=$(j '.worktree.name // ""')
+wt_path=$(j '.worktree.path // ""')
+wt_branch=$(j '.worktree.branch // ""')
+wt_original_cwd=$(j '.worktree.original_cwd // ""')
+wt_original_branch=$(j '.worktree.original_branch // ""')
+
+# --- ccusage placeholders (peak-relative; wire calls if you need them) ----
 session_cost="0.00"
 block_pct="0"; block_proj="0"
 weekly_pct="0"
@@ -785,18 +992,40 @@ function bind(id, key, parse) {
   });
 }
 bind('in-session-id', 'session_id');
+bind('in-session-name', 'session_name');
 bind('in-model', 'model');
+bind('in-version', 'version');
+bind('in-output-style', 'outputStyle');
 bind('in-project-dir', 'project_dir');
 bind('in-transcript', 'transcript');
+bind('in-ws-worktree', 'wsWorktree');
+bind('in-repo-host', 'repoHost');
+bind('in-repo-owner', 'repoOwner');
+bind('in-repo-name', 'repoName');
+bind('in-added-dirs', 'addedDirs', v => +v || 0);
 bind('in-branch', 'branch');
 bind('in-dirty', 'dirty');
 bind('in-ahead', 'ahead', v => +v || 0);
 bind('in-behind', 'behind', v => +v || 0);
 bind('in-ctx-pct', 'ctxPct', v => +v);
 bind('in-ctx-size', 'ctxSize', v => +v);
+bind('in-input-tokens', 'inputTokens', v => +v || 0);
+bind('in-output-tokens', 'outputTokens', v => +v || 0);
+bind('in-cache-read', 'cacheRead', v => +v || 0);
+bind('in-cache-write', 'cacheWrite', v => +v || 0);
 bind('in-plan-5h', 'plan5h', v => +v);
 bind('in-plan-week', 'planWeek', v => +v);
 bind('in-week-rem-d', 'weekRemD', v => +v);
+bind('in-effort', 'effort');
+bind('in-thinking-enabled', 'thinkingEnabled', v => v === 'true' || v === true);
+bind('in-vim-mode', 'vimMode');
+bind('in-wt-name', 'wtName');
+bind('in-wt-branch', 'wtBranch');
+bind('in-wt-original-branch', 'wtOriginalBranch');
+bind('in-pr-number', 'prNumber');
+bind('in-pr-state', 'prState');
+bind('in-agent-name', 'agentName');
+bind('in-agent-type', 'agentType');
 bind('in-cost-session', 'costSession', v => +v);
 bind('in-cost-today', 'costToday', v => +v);
 bind('in-block-used', 'blockUsed', v => +v);

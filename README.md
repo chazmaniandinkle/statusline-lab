@@ -24,7 +24,20 @@ Single self-contained HTML file. No build step, no dependencies, runs offline.
 
 ## Widget palette
 
-Session, project, project/session, cwd, model (full / 2-letter / emoji), branch + dirty + ahead/behind, ctx (% / raw / bar / dots / full), cost session, cost today, 5h block (used / projected / combined / remaining), weekly, burn rate, burn-emoji, sparkline, cache TTL, worktree, time, moon phase, MCP health, vim mode, thinking effort.
+The lab covers every field documented in Claude Code's `statusLine` stdin schema (extracted from the local `claude` binary):
+
+**Identity / session:** `session`, `session_long`, `session_name`, `project`, `project_session`, `cc_version`, `output_style`.
+**Model:** full name, 2-letter (`op`/`so`/`ha`), emoji.
+**Workspace:** `dir` (tildified), `repo` (`owner/repo`), `repo_host`, `added_dirs`, `ws_git_worktree`.
+**Git:** branch, dirty (`*`), ahead/behind.
+**Context window:** `ctx_pct`, `ctx_raw`, `ctx_bar`, `ctx_bar_dots`, `ctx_full`, `ctx_input_tokens`, `ctx_output_tokens`, `cache_hit_ratio`.
+**Plan limits (rate_limits.*):** `plan_5h`, `plan_5h_reset`, `plan_week`, `plan_week_reset`.
+**Agent state:** `effort_level`, `thinking_enabled` (🧠), `vim_mode` (with mode-colored chrome).
+**--agent flag:** `agent_name`, `agent_type`.
+**PR badge (.pr.*):** `pr_number`, `pr_state` (✓ / … / ✗ / ◌).
+**Worktree (.worktree.*):** `worktree`, `worktree_branch`, `worktree_orig_branch`.
+**ccusage fallback (peak-relative):** `cost_session`, `cost_today`, `block_pct`, `block_proj`, `block_combined`, `block_remaining`, `weekly`, `weekly_label`, `burn_rate`, `burn_emoji`, `sparkline`, `cache_ttl`.
+**Misc:** `time`, `moon`, `mcp_health`.
 
 ## Install your own statusline
 
