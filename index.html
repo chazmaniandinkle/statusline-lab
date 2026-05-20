@@ -65,10 +65,12 @@
     background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
     padding: 2px 8px; font-size: 11px; font-family: var(--mono);
     cursor: grab; user-select: none;
+    -webkit-user-drag: element; -khtml-user-drag: element;
   }
   .chip:active { cursor: grabbing; }
   .chip:hover { border-color: var(--accent); }
   .chip.dragging { opacity: 0.3; }
+  .seg-list { -webkit-user-drag: none; }
   .seg-list.drop-active { border-color: var(--accent); background: rgba(88,166,255,0.08); }
   .lines { display: flex; flex-direction: column; gap: 6px; }
   .line-row { display: flex; gap: 8px; align-items: center; }
@@ -575,6 +577,7 @@ function renderPalette() {
     const c = document.createElement('span');
     c.className = 'chip';
     c.textContent = w.name;
+    c.setAttribute('draggable', 'true');
     c.draggable = true;
     c.dataset.source = 'palette';
     c.dataset.key = key;
