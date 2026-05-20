@@ -121,8 +121,13 @@
     <input type="text" id="in-model" value="Claude Sonnet 4.5">
     <label>version <span class="small">(Claude Code version)</span></label>
     <input type="text" id="in-version" value="2.1.145">
-    <label>output_style.name</label>
-    <input type="text" id="in-output-style" value="default">
+    <label>output_style.name <span class="small">(/output-style preset or custom)</span></label>
+    <input type="text" id="in-output-style" value="default" list="output-style-presets">
+    <datalist id="output-style-presets">
+      <option value="default">
+      <option value="Explanatory">
+      <option value="Learning">
+    </datalist>
 
     <h2>Workspace</h2>
     <label>workspace.project_dir</label>
@@ -137,8 +142,8 @@
     </div>
     <label>repo.name</label>
     <input type="text" id="in-repo-name" value="">
-    <label>workspace.added_dirs count</label>
-    <input type="number" id="in-added-dirs" value="0">
+    <label>workspace.added_dirs <span class="small">(comma-separated paths)</span></label>
+    <input type="text" id="in-added-dirs" value="" placeholder="/Users/you/notes, /Users/you/refs">
 
     <h2>Git</h2>
     <label>branch</label>
@@ -317,7 +322,7 @@ const state = {
   project_dir: '/Users/you/projects/example',
   wsWorktree: '',
   repoHost: '', repoOwner: '', repoName: '',
-  addedDirs: 0,
+  addedDirs: [],
   // git (derived, not on stdin schema directly but needed for the widgets)
   branch: 'main', dirty: false, ahead: 0, behind: 0,
   // .context_window.*
@@ -465,7 +470,8 @@ const WIDGETS = {
   output_style:      { name: 'style: default',     fn: s => ({t: `style:${s.outputStyle}`, c: 'fg-muted'}) },
   repo:              { name: 'owner/repo',         fn: s => (s.repoOwner && s.repoName) ? {t: `${s.repoOwner}/${s.repoName}`, c: 'fg-cyan'} : {t: '', c: ''} },
   repo_host:         { name: 'repo host',          fn: s => s.repoHost ? {t: s.repoHost, c: 'fg-muted'} : {t: '', c: ''} },
-  added_dirs:        { name: '+N dirs',            fn: s => s.addedDirs > 0 ? {t: `+${s.addedDirs} dirs`, c: 'fg-muted'} : {t: '', c: ''} },
+  added_dirs:        { name: '+N dirs',            fn: s => s.addedDirs.length > 0 ? {t: `+${s.addedDirs.length} dirs`, c: 'fg-muted'} : {t: '', c: ''} },
+  added_dir_first:   { name: '+ dirname',          fn: s => s.addedDirs.length > 0 ? {t: `+${s.addedDirs[0].split('/').pop()}`, c: 'fg-muted'} : {t: '', c: ''} },
   // Context token detail
   ctx_input_tokens:  { name: 'in 220K',            fn: s => ({t: `in ${s.inputTokens}K`, c: 'fg-muted'}) },
   ctx_output_tokens: { name: 'out 1200',           fn: s => ({t: `out ${s.outputTokens}`, c: 'fg-muted'}) },
@@ -536,6 +542,7 @@ const BASH_EXPR = {
   repo:              '"${repo_owner}/${repo_name}"',
   repo_host:         '"$repo_host"',
   added_dirs:        '"+${added_dirs} dirs"',
+  added_dir_first:   '"+$added_dir_first"',
   branch:            '"(${branch})"',
   branch_dirty:      '"(${branch}${dirty})"',
   ctx_pct_label:     '"ctx ${ctx_pct}%"',
@@ -615,10 +622,20 @@ ws_git_worktree=$(j '.workspace.git_worktree // ""')
 repo_host=$(j '.workspace.repo.host // ""')
 repo_owner=$(j '.workspace.repo.owner // ""')
 repo_name=$(j '.workspace.repo.name // ""')
-added_dirs=$(j '.workspace.added_dirs | length // 0')
+added_dirs=$(j '(.workspace.added_dirs // []) | length')
+added_dir_first=$(j '.workspace.added_dirs[0]? // ""')
+[[ -n "$added_dir_first" ]] && added_dir_first=$(basename "$added_dir_first")
 project_name=""
 [[ -n "$transcript" ]] && project_name=$(basename "$(dirname "$transcript")")
-dir_disp="\${project_dir/#$HOME/~}"
+# Tildify project_dir. Handles \$HOME exactly, and falls back to
+# /Users/<u>/ and /home/<u>/ prefixes so the display matches the
+# JS-side preview regardless of which user the path encodes.
+dir_disp="$project_dir"
+case "$dir_disp" in
+  "$HOME"|"$HOME"/*) dir_disp="~\${dir_disp#$HOME}" ;;
+  /Users/*/*)        dir_disp="~/\${dir_disp#/Users/*/}" ;;
+  /home/*/*)         dir_disp="~/\${dir_disp#/home/*/}" ;;
+esac
 
 # --- Output style ----------------------------------------------------------
 output_style=$(j '.output_style.name // ""')
@@ -638,8 +655,8 @@ ctx_pct=\${ctx_pct%.*}
 total_input_tokens=$(j '.context_window.total_input_tokens // 0')
 output_tokens=$(j '.context_window.total_output_tokens // 0')
 input_tokens_k=$(( total_input_tokens / 1000 ))
-cache_read=$(j '.context_window.current_usage.cache_read_input_tokens // 0')
-cache_write=$(j '.context_window.current_usage.cache_creation_input_tokens // 0')
+cache_read=$(j '.context_window.current_usage.cache_read_input_tokens? // 0')
+cache_write=$(j '.context_window.current_usage.cache_creation_input_tokens? // 0')
 cache_total=$(( cache_read + cache_write ))
 cache_hit_pct=0
 [[ "$cache_total" -gt 0 ]] && cache_hit_pct=$(( cache_read * 100 / cache_total ))
@@ -937,7 +954,7 @@ const PRESETS = [
     url: 'https://github.com/sirmalloc/ccstatusline',
     sep: ' | ',
     lines: [
-      ['model', 'dir', 'branch_dirty', 'thinking'],
+      ['model', 'dir', 'branch_dirty', 'thinking_enabled'],
       ['burn_rate', 'sparkline', 'ctx_pct_label', 'block_combined'],
     ],
   },
@@ -957,7 +974,7 @@ const PRESETS = [
     sep: ' · ',
     lines: [
       ['project_session', 'dir', 'branch_dirty', 'model_emoji'],
-      ['mcp_health', 'cache_ttl', 'thinking', 'sparkline'],
+      ['mcp_health', 'cache_ttl', 'thinking_enabled', 'sparkline'],
       ['ctx_full', 'block_combined', 'weekly_label'],
     ],
   },
@@ -1013,7 +1030,7 @@ bind('in-ws-worktree', 'wsWorktree');
 bind('in-repo-host', 'repoHost');
 bind('in-repo-owner', 'repoOwner');
 bind('in-repo-name', 'repoName');
-bind('in-added-dirs', 'addedDirs', v => +v || 0);
+bind('in-added-dirs', 'addedDirs', v => v.split(',').map(s => s.trim()).filter(Boolean));
 bind('in-branch', 'branch');
 bind('in-dirty', 'dirty');
 bind('in-ahead', 'ahead', v => +v || 0);
