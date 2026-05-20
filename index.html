@@ -113,9 +113,9 @@
     <label>model.display_name</label>
     <input type="text" id="in-model" value="Claude Sonnet 4.5">
     <label>workspace.project_dir</label>
-    <input type="text" id="in-project-dir" value="/Users/slowbro/workspaces/cog">
+    <input type="text" id="in-project-dir" value="/Users/you/projects/example">
     <label>transcript_path <span class="small">(project name comes from this)</span></label>
-    <input type="text" id="in-transcript" value="/Users/slowbro/.claude/projects/-Users-slowbro-workspaces-cog/sess.jsonl">
+    <input type="text" id="in-transcript" value="/Users/you/.claude/projects/-Users-you-projects-example/sess.jsonl">
 
     <h2>Git</h2>
     <label>branch</label>
@@ -202,8 +202,8 @@
 const state = {
   session_id: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
   model: 'Claude Sonnet 4.5',
-  project_dir: '/Users/slowbro/workspaces/cog',
-  transcript: '/Users/slowbro/.claude/projects/-Users-slowbro-workspaces-cog/sess.jsonl',
+  project_dir: '/Users/you/projects/example',
+  transcript: '/Users/you/.claude/projects/-Users-you-projects-example/sess.jsonl',
   branch: 'main',
   dirty: false,
   ahead: 0,
@@ -232,7 +232,7 @@ function deriveProject(s) {
   if (parts.length >= 2 && parts[parts.length - 2]) return parts[parts.length - 2];
   return s.project_dir.replace(/^\//, '-').replace(/\//g, '-');
 }
-function tildify(p) { return p.replace(/^\/Users\/[^/]+/, '~'); }
+function tildify(p) { return p.replace(/^(\/Users\/[^/]+|\/home\/[^/]+)/, '~'); }
 function shortModel(m) {
   m = m.toLowerCase();
   if (m.includes('opus')) return 'op';
