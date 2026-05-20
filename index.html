@@ -36,13 +36,9 @@
   .row > * { flex: 1; }
   .row > label { flex: 0 0 auto; }
   .terminal {
-    background: #000; padding: 14px 16px 16px; border-radius: 6px;
+    background: #000; padding: 16px; border-radius: 6px;
     font: 13px/1.5 var(--mono); white-space: pre; overflow-x: auto;
-    min-height: 80px;
-  }
-  .terminal::before {
-    content: "● ● ●"; color: #444; display: block; margin-bottom: 8px;
-    letter-spacing: 4px; font-size: 11px;
+    min-height: 60px;
   }
   .fg-green { color: var(--green); }
   .fg-yellow { color: var(--yellow); }
@@ -71,7 +67,17 @@
   .chip:hover { border-color: var(--accent); }
   .chip.dragging { opacity: 0.3; }
   .seg-list { -webkit-user-drag: none; }
+  .seg-list:empty::before {
+    content: "drop widgets here or click a palette chip";
+    color: var(--muted); font-size: 11px; font-style: italic;
+    padding: 0 6px; pointer-events: none;
+  }
   .seg-list.drop-active { border-color: var(--accent); background: rgba(88,166,255,0.08); }
+  .palette-group { margin-bottom: 6px; }
+  .palette-group-label {
+    font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .1em; margin: 6px 0 3px; font-weight: 600;
+  }
   .lines { display: flex; flex-direction: column; gap: 6px; }
   .line-row { display: flex; gap: 8px; align-items: center; }
   .line-label { font: 11px var(--mono); color: var(--muted); width: 24px; }
@@ -291,7 +297,7 @@
     </div>
 
     <h2>Widget palette</h2>
-    <div class="widget-list" id="widget-palette"></div>
+    <div id="widget-palette"></div>
     <div class="small">Click a palette chip to append to the last line, or drag it onto any line. Drag layout chips between lines or sideways to reorder. Click × to remove.</div>
 
     <details style="margin-top:12px">
@@ -909,28 +915,69 @@ function flash(msg) {
 }
 
 // ---------- palette ----------
+// Groups widgets for the palette UI. Keys reference WIDGETS; any key not
+// listed here falls into the trailing 'Misc' group automatically.
+const PALETTE_GROUPS = [
+  ['Identity / session', ['session', 'session_long', 'session_name', 'project', 'project_session', 'cc_version', 'output_style']],
+  ['Model',              ['model', 'model_short', 'model_emoji']],
+  ['Workspace',          ['dir', 'repo', 'repo_host', 'added_dirs', 'added_dir_first', 'ws_git_worktree']],
+  ['Git',                ['branch', 'branch_dirty', 'branch_ahead_behind']],
+  ['Context window',     ['ctx_pct', 'ctx_pct_label', 'ctx_raw', 'ctx_bar', 'ctx_bar_dots', 'ctx_full', 'ctx_input_tokens', 'ctx_output_tokens', 'cache_hit_ratio']],
+  ['Plan limits',        ['plan_5h', 'plan_5h_reset', 'plan_week', 'plan_week_reset']],
+  ['Agent state',        ['effort_level', 'thinking_enabled', 'vim_mode']],
+  ['--agent flag',       ['agent_name', 'agent_type']],
+  ['PR badge',           ['pr_number', 'pr_state']],
+  ['Worktree',           ['worktree', 'worktree_branch', 'worktree_orig_branch']],
+  ['ccusage (fallback)', ['cost_session', 'cost_today', 'block_pct', 'block_proj', 'block_combined', 'block_remaining', 'weekly', 'weekly_label', 'burn_rate', 'burn_emoji', 'sparkline', 'cache_ttl']],
+  ['Misc',               ['time', 'moon', 'mcp_health']],
+];
+function makeChip(key, w) {
+  const c = document.createElement('span');
+  c.className = 'chip';
+  c.textContent = w.name;
+  c.setAttribute('draggable', 'true');
+  c.draggable = true;
+  c.dataset.source = 'palette';
+  c.dataset.key = key;
+  c.title = 'Click to append, or drag onto a line';
+  c.onclick = () => {
+    mutate(() => {
+      const last = state.lines[state.lines.length - 1] ?? state.lines[0];
+      last.push(key);
+    });
+  };
+  c.addEventListener('dragstart', dragStart);
+  c.addEventListener('dragend', dragEnd);
+  return c;
+}
 function renderPalette() {
   const wrap = document.getElementById('widget-palette');
   wrap.innerHTML = '';
-  Object.entries(WIDGETS).forEach(([key, w]) => {
-    const c = document.createElement('span');
-    c.className = 'chip';
-    c.textContent = w.name;
-    c.setAttribute('draggable', 'true');
-    c.draggable = true;
-    c.dataset.source = 'palette';
-    c.dataset.key = key;
-    c.title = 'Click to append, or drag onto a line';
-    c.onclick = () => {
-      mutate(() => {
-        const last = state.lines[state.lines.length - 1] ?? state.lines[0];
-        last.push(key);
-      });
-    };
-    c.addEventListener('dragstart', dragStart);
-    c.addEventListener('dragend', dragEnd);
-    wrap.appendChild(c);
+  const grouped = new Set();
+  PALETTE_GROUPS.forEach(([label, keys]) => {
+    const present = keys.filter(k => WIDGETS[k]);
+    if (present.length === 0) return;
+    const lbl = document.createElement('div');
+    lbl.className = 'palette-group-label';
+    lbl.textContent = label;
+    wrap.appendChild(lbl);
+    const list = document.createElement('div');
+    list.className = 'palette-group widget-list';
+    present.forEach(k => { list.appendChild(makeChip(k, WIDGETS[k])); grouped.add(k); });
+    wrap.appendChild(list);
   });
+  // Any unlisted widgets get a fallback group so they're never lost.
+  const orphans = Object.keys(WIDGETS).filter(k => !grouped.has(k));
+  if (orphans.length) {
+    const lbl = document.createElement('div');
+    lbl.className = 'palette-group-label';
+    lbl.textContent = 'Other';
+    wrap.appendChild(lbl);
+    const list = document.createElement('div');
+    list.className = 'palette-group widget-list';
+    orphans.forEach(k => list.appendChild(makeChip(k, WIDGETS[k])));
+    wrap.appendChild(list);
+  }
 }
 
 // ---------- presets ----------
